@@ -43,3 +43,4 @@ How the app is built and how to extend it.
 - [Adding a provider](adding-a-provider.md) — the metric contract and the register/test/document steps
 - [Debugging & capturing logs](debugging.md) — running a local build and streaming logs
 - [Logging](logging.md) — the file log, log levels, subsystem tags, and what is never logged
+- [Porting fixes from upstream](porting-upstream-fixes.md) — backporting provider fixes from `robinebers/openusage` onto `v0.7` and cutting a release
