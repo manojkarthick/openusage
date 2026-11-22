@@ -47,6 +47,15 @@ final class AntigravityQuotaSummaryTests: XCTestCase {
     ]}]
     """
 
+    private func assertUsed(
+        _ lines: [MetricLine], _ expected: [Double], file: StaticString = #filePath, line: UInt = #line
+    ) {
+        XCTAssertEqual(lines.count, expected.count, file: file, line: line)
+        for (metric, target) in zip(lines, expected) {
+            XCTAssertEqual(used(metric) ?? -1, target, accuracy: 0.0001, file: file, line: line)
+        }
+    }
+
     // MARK: - Parser
 
     func testWrappedAndBarePayloadsProduceIdenticalFiveLines() {
@@ -56,7 +65,7 @@ final class AntigravityQuotaSummaryTests: XCTestCase {
 
         guard let lines = bare else { return XCTFail("full summary did not parse") }
         XCTAssertEqual(lines.map(\.label), ["Session", "Weekly", "Argon Weekly", "Claude", "Claude Weekly"])
-        XCTAssertEqual(lines.map { used($0) }, [25, 10, 40, 60, 0])
+        assertUsed(lines, [25, 10, 40, 60, 0])
         XCTAssertEqual(resetsAt(lines[0]), OpenUsageISO8601.date(from: "2026-07-02T16:00:00Z"))
         XCTAssertEqual(resetsAt(lines[2]), OpenUsageISO8601.date(from: "2026-10-20T08:00:00Z"))
         XCTAssertEqual(resetsAt(lines[3]), OpenUsageISO8601.date(from: "2026-07-02T15:30:00Z"))
@@ -202,9 +211,9 @@ final class AntigravityQuotaSummaryTests: XCTestCase {
             if path == AntigravityUsageClient.quotaSummaryPath {
                 // The remote endpoint returns the payload bare (no "response" wrapper).
                 switch request.url.host {
-                case "cloudcode-pa.googleapis.com":
-                    return HTTPResponse(statusCode: 200, headers: [:], body: Data("{\(groupsJSON)}".utf8))
                 case "daily-cloudcode-pa.googleapis.com":
+                    return HTTPResponse(statusCode: 200, headers: [:], body: Data("{\(groupsJSON)}".utf8))
+                case "cloudcode-pa.googleapis.com":
                     return HTTPResponse(statusCode: 200, headers: [:], body: Data("{\(partialGroupsJSON)}".utf8))
                 default:
                     return HTTPResponse(statusCode: 404, headers: [:], body: Data())
@@ -220,10 +229,12 @@ final class AntigravityQuotaSummaryTests: XCTestCase {
         let snapshot = await provider.refresh()
         XCTAssertEqual(snapshot.plan, "Pro")
         XCTAssertEqual(snapshot.lines.map(\.label), ["Session", "Weekly", "Argon Weekly", "Claude", "Claude Weekly"])
-        XCTAssertEqual(snapshot.lines.map { used($0) }, [25, 10, 40, 60, 0])
-        assertSummaryRequests(routing, hosts: ["cloudcode-pa.googleapis.com"])
-        XCTAssertFalse(routing.requests.contains { $0.url.host == "daily-cloudcode-pa.googleapis.com" },
-                       "a complete production response must not be replaced by the partial daily response")
+        assertUsed(snapshot.lines, [25, 10, 40, 60, 0])
+        assertSummaryRequests(routing, hosts: ["daily-cloudcode-pa.googleapis.com"])
+        let summaryRequest = routing.requests.first { $0.url.path == AntigravityUsageClient.quotaSummaryPath }
+        XCTAssertTrue(summaryRequest?.headers["User-Agent"]?.hasPrefix("antigravity/hub/") == true)
+        XCTAssertFalse(routing.requests.contains { $0.url.host == "cloudcode-pa.googleapis.com" && $0.url.path == AntigravityUsageClient.quotaSummaryPath },
+                       "a complete daily response must not be replaced by the production response")
 
         // Without Antigravity's client metadata loadCodeAssist omits currentTier/paidTier.
         let planRequest = routing.requests.first { $0.url.path.contains("loadCodeAssist") }
@@ -234,14 +245,14 @@ final class AntigravityQuotaSummaryTests: XCTestCase {
     }
 
     @MainActor
-    func testCloudCodeProduction503FallsBackToPartialDailySummary() async {
+    func testCloudCodeDaily503FallsBackToPartialProductionSummary() async {
         let groupsJSON = claudeOnlyGroupsJSON
         let routing = RoutingHTTPClient { request in
             if request.url.path == AntigravityUsageClient.quotaSummaryPath {
                 switch request.url.host {
-                case "cloudcode-pa.googleapis.com":
-                    return HTTPResponse(statusCode: 503, headers: [:], body: Data())
                 case "daily-cloudcode-pa.googleapis.com":
+                    return HTTPResponse(statusCode: 503, headers: [:], body: Data())
+                case "cloudcode-pa.googleapis.com":
                     return HTTPResponse(statusCode: 200, headers: [:], body: Data("{\(groupsJSON)}".utf8))
                 default:
                     break
@@ -254,19 +265,19 @@ final class AntigravityQuotaSummaryTests: XCTestCase {
         XCTAssertNil(snapshot.errorCategory)
         XCTAssertEqual(snapshot.lines.map(\.label), ["Claude", "Claude Weekly"],
                        "Gemini and Argon rows must stay absent when the fallback has no data for them")
-        XCTAssertEqual(snapshot.lines.map { used($0) }, [60, 0])
-        assertSummaryRequests(routing, hosts: ["cloudcode-pa.googleapis.com", "daily-cloudcode-pa.googleapis.com"])
+        assertUsed(snapshot.lines, [60, 0])
+        assertSummaryRequests(routing, hosts: ["daily-cloudcode-pa.googleapis.com", "cloudcode-pa.googleapis.com"])
     }
 
     @MainActor
-    func testCloudCodeProductionTimeoutFallsBackToDailySummary() async {
+    func testCloudCodeDailyTimeoutFallsBackToProductionSummary() async {
         let groupsJSON = fullGroupsJSON
         let routing = RoutingHTTPClient { request in
             if request.url.path == AntigravityUsageClient.quotaSummaryPath {
                 switch request.url.host {
-                case "cloudcode-pa.googleapis.com":
-                    throw URLError(.timedOut)
                 case "daily-cloudcode-pa.googleapis.com":
+                    throw URLError(.timedOut)
+                case "cloudcode-pa.googleapis.com":
                     return HTTPResponse(statusCode: 200, headers: [:], body: Data("{\(groupsJSON)}".utf8))
                 default:
                     break
@@ -278,8 +289,8 @@ final class AntigravityQuotaSummaryTests: XCTestCase {
         let snapshot = await makeCloudCodeProvider(routing: routing).refresh()
         XCTAssertNil(snapshot.errorCategory)
         XCTAssertEqual(snapshot.lines.map(\.label), ["Session", "Weekly", "Argon Weekly", "Claude", "Claude Weekly"])
-        XCTAssertEqual(snapshot.lines.map { used($0) }, [25, 10, 40, 60, 0])
-        assertSummaryRequests(routing, hosts: ["cloudcode-pa.googleapis.com", "daily-cloudcode-pa.googleapis.com"])
+        assertUsed(snapshot.lines, [25, 10, 40, 60, 0])
+        assertSummaryRequests(routing, hosts: ["daily-cloudcode-pa.googleapis.com", "cloudcode-pa.googleapis.com"])
     }
 
     private func assertSummaryRequests(
@@ -331,16 +342,16 @@ final class AntigravityQuotaSummaryTests: XCTestCase {
             guard request.url.path.contains("retrieveUserQuotaSummary") else {
                 return HTTPResponse(statusCode: 404, headers: [:], body: Data())
             }
-            let body = request.url.host == "cloudcode-pa.googleapis.com" ? claudeOnly : "{\(groupsJSON)}"
+            let body = request.url.host == "daily-cloudcode-pa.googleapis.com" ? claudeOnly : "{\(groupsJSON)}"
             return HTTPResponse(statusCode: 200, headers: [:], body: Data(body.utf8))
         }
         let provider = makeCloudCodeProvider(routing: routing)
 
         let snapshot = await provider.refresh()
         XCTAssertEqual(snapshot.lines.map(\.label), ["Session", "Weekly", "Argon Weekly", "Claude", "Claude Weekly"])
-        // Claude buckets come from the production host (first wins); Gemini and Argon from the daily host.
-        XCTAssertEqual(snapshot.lines.map { used($0) }, [25, 10, 40, 0, 20])
-        assertSummaryRequests(routing, hosts: ["cloudcode-pa.googleapis.com", "daily-cloudcode-pa.googleapis.com"])
+        // Claude buckets come from the daily host (first wins); Gemini and Argon from the production host.
+        assertUsed(snapshot.lines, [25, 10, 40, 0, 20])
+        assertSummaryRequests(routing, hosts: ["daily-cloudcode-pa.googleapis.com", "cloudcode-pa.googleapis.com"])
     }
 
     @MainActor
@@ -350,7 +361,7 @@ final class AntigravityQuotaSummaryTests: XCTestCase {
             guard request.url.path.contains("retrieveUserQuotaSummary") else {
                 return HTTPResponse(statusCode: 404, headers: [:], body: Data())
             }
-            if request.url.host == "daily-cloudcode-pa.googleapis.com" {
+            if request.url.host == "cloudcode-pa.googleapis.com" {
                 try await Task.sleep(for: .seconds(30))
             }
             return HTTPResponse(statusCode: 200, headers: [:], body: Data("{\(groupsJSON)}".utf8))
@@ -361,7 +372,7 @@ final class AntigravityQuotaSummaryTests: XCTestCase {
         let snapshot = await provider.refresh()
         XCTAssertLessThan(Date().timeIntervalSince(start), 5)
         XCTAssertEqual(snapshot.lines.map(\.label), ["Session", "Weekly", "Argon Weekly", "Claude", "Claude Weekly"])
-        assertSummaryRequests(routing, hosts: ["cloudcode-pa.googleapis.com"])
+        assertSummaryRequests(routing, hosts: ["daily-cloudcode-pa.googleapis.com"])
     }
 
     @MainActor
@@ -371,7 +382,7 @@ final class AntigravityQuotaSummaryTests: XCTestCase {
             guard request.url.path.contains("retrieveUserQuotaSummary") else {
                 return HTTPResponse(statusCode: 404, headers: [:], body: Data())
             }
-            if request.url.host == "cloudcode-pa.googleapis.com" {
+            if request.url.host == "daily-cloudcode-pa.googleapis.com" {
                 return HTTPResponse(statusCode: 403, headers: [:], body: Data())
             }
             return HTTPResponse(statusCode: 200, headers: [:], body: Data("{\(groupsJSON)}".utf8))
@@ -420,7 +431,7 @@ final class AntigravityQuotaSummaryTests: XCTestCase {
         let snapshot = await provider.refresh()
         // Summary values win — not the single 1%-used line the legacy GetUserStatus configs would pool to.
         XCTAssertEqual(snapshot.lines.map(\.label), ["Session", "Weekly", "Argon Weekly", "Claude", "Claude Weekly"])
-        XCTAssertEqual(snapshot.lines.map { used($0) }, [25, 10, 40, 60, 0])
+        assertUsed(snapshot.lines, [25, 10, 40, 60, 0])
         XCTAssertEqual(snapshot.plan, "Pro")
         XCTAssertFalse(routing.requests.contains { $0.url.path.hasSuffix("/GetCommandModelConfigs") })
     }
@@ -470,7 +481,7 @@ final class AntigravityQuotaSummaryTests: XCTestCase {
 
         let snapshot = await provider.refresh()
         XCTAssertEqual(snapshot.lines.map(\.label), ["Session", "Claude"])
-        XCTAssertEqual(snapshot.lines.map { used($0) }, [50, 20])
+        assertUsed(snapshot.lines, [50, 20])
         XCTAssertEqual(snapshot.plan, "Pro")
     }
 }

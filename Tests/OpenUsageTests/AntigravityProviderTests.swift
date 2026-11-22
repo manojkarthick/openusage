@@ -52,8 +52,8 @@ final class AntigravityProviderTests: XCTestCase {
         // Pro and Flash share one pool since Antigravity's 2026-05-19 quota merge, so all Gemini
         // models collapse into a single "Session" meter (worst fraction wins across the whole pool).
         XCTAssertEqual(lines.map(\.label), ["Session", "Claude"])
-        XCTAssertEqual(used(lines[0]), 50)  // worst Gemini fraction (Pro Low 0.5) -> 50% used
-        XCTAssertEqual(used(lines[1]), 70)  // worst non-Gemini (Claude 0.3) -> 70% used
+        XCTAssertEqual(used(lines[0]) ?? -1, 50, accuracy: 0.0001)  // worst Gemini fraction (Pro Low 0.5) -> 50% used
+        XCTAssertEqual(used(lines[1]) ?? -1, 70, accuracy: 0.0001)  // worst non-Gemini (Claude 0.3) -> 70% used
     }
 
     func testBuildLinesDedupKeepsWorstFractionAndItsReset() {
@@ -65,8 +65,8 @@ final class AntigravityProviderTests: XCTestCase {
         ]
         let lines = AntigravityUsageMapper.buildLines(configs)
         XCTAssertEqual(lines.count, 1)
-        XCTAssertEqual(used(lines[0]), 80)              // worst fraction 0.2
-        XCTAssertEqual(resetsAt(lines[0]), earlier)     // reset of the kept (worst) entry
+        XCTAssertEqual(used(lines[0]) ?? -1, 80, accuracy: 0.0001) // worst fraction 0.2
+        XCTAssertEqual(resetsAt(lines[0]), earlier)                // reset of the kept (worst) entry
     }
 
     func testBuildLinesDropsBlacklistedAndEmptyLabels() {
@@ -77,7 +77,7 @@ final class AntigravityProviderTests: XCTestCase {
         ]
         let lines = AntigravityUsageMapper.buildLines(configs)
         XCTAssertEqual(lines.map(\.label), ["Session"])
-        XCTAssertEqual(used(lines[0]), 40)
+        XCTAssertEqual(used(lines[0]) ?? -1, 40, accuracy: 0.0001)
     }
 
     func testBuildLinesClampsOutOfRangeFractions() {
@@ -355,8 +355,8 @@ final class AntigravityProviderTests: XCTestCase {
         XCTAssertEqual(snapshot.plan, "Pro")
         // Legacy per-model data merges into the two pool meters (worst fraction per pool).
         XCTAssertEqual(snapshot.lines.map(\.label), ["Session", "Claude"])
-        XCTAssertEqual(used(snapshot.lines[0]), 60)
-        XCTAssertEqual(used(snapshot.lines[1]), 30)
+        XCTAssertEqual(used(snapshot.lines[0]) ?? -1, 60, accuracy: 0.0001)
+        XCTAssertEqual(used(snapshot.lines[1]) ?? -1, 30, accuracy: 0.0001)
     }
 
     @MainActor

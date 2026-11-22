@@ -295,8 +295,9 @@ final class AntigravityProvider: ProviderRuntime {
         switch await usageClient.cloudCodeAllHosts(
             path: AntigravityUsageClient.quotaSummaryPath,
             token: token,
-            userAgent: "antigravity",
+            userAgent: AntigravityUsageClient.clientUserAgent,
             body: [:],
+            baseURLs: AntigravityUsageClient.quotaSummaryURLs,
             isComplete: AntigravityUsageMapper.isCompleteSummary
         ) {
         case .authFailed:

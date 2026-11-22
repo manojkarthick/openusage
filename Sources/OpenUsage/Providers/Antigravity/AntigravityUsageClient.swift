@@ -27,11 +27,14 @@ enum TokenRefreshOutcome: Sendable {
 /// Google Cloud Code endpoints, and the Google OAuth token refresh.
 struct AntigravityUsageClient: Sendable {
     static let lsService = "exa.language_server_pb.LanguageServerService"
-    // The daily endpoint can omit Gemini quotas from a successful response; prefer production.
+    // Plan and project lookups prefer production.
     static let cloudCodeURLs = [
         "https://cloudcode-pa.googleapis.com",
         "https://daily-cloudcode-pa.googleapis.com"
     ]
+    // Production can return untouched Gemini windows; daily has the active counters.
+    // Use production for missing buckets or failed daily reads.
+    static let quotaSummaryURLs = Array(cloudCodeURLs.reversed())
     static let fetchModelsPath = "/v1internal:fetchAvailableModels"
     static let loadCodeAssistPath = "/v1internal:loadCodeAssist"
     static let retrieveQuotaPath = "/v1internal:retrieveUserQuota"
@@ -90,15 +93,15 @@ struct AntigravityUsageClient: Sendable {
         await cloudCode(path: Self.loadCodeAssistPath, token: token, userAgent: Self.clientUserAgent, payload: Self.loadCodeAssistPayload)
     }
 
-    /// The Antigravity client's own User-Agent shape (`%s/%s (aidev_client; os_type=…; arch=…)` in its
-    /// language server). Google marks other callers `UNSUPPORTED_CLIENT` and drops `paidTier`.
+    /// The hub client identity exposes the Gemini pools and separate Argon quota; other User-Agents
+    /// cause Google to drop `paidTier`, Gemini pools, or Argon.
     static let clientUserAgent: String = {
         #if arch(arm64)
         let arch = "arm64"
         #else
         let arch = "amd64"
         #endif
-        return "antigravity/2.24.0 (aidev_client; os_type=darwin; arch=\(arch))"
+        return "antigravity/hub/2.24.0 (aidev_client; os_type=darwin; arch=\(arch))"
     }()
 
     /// `ClientMetadata` enum names as they appear in the Antigravity language server's protos.
@@ -128,11 +131,12 @@ struct AntigravityUsageClient: Sendable {
         token: String,
         userAgent: String,
         body: [String: String],
+        baseURLs: [String] = Self.cloudCodeURLs,
         isComplete: (Data) -> Bool = { _ in false }
     ) async -> CloudCodeAllHostsOutcome {
         let payload = (try? JSONSerialization.data(withJSONObject: body)) ?? Data("{}".utf8)
         var responses: [HTTPResponse] = []
-        for (index, base) in Self.cloudCodeURLs.enumerated() {
+        for (index, base) in baseURLs.enumerated() {
             guard let url = URL(string: base + path) else { continue }
             let request = Self.cloudCodeRequest(url: url, token: token, userAgent: userAgent, payload: payload)
             guard let response = try? await http.send(request) else { continue }
