@@ -1,5 +1,8 @@
 # OpenUsage
 
+> [!NOTE]
+> This is a maintained `v0.7` fork of [robinebers/openusage](https://github.com/robinebers/openusage), branched from `v0.7.16` before the `v0.8.0` rewrite. It preserves the `v0.7` UI, local credential discovery, local spend/token estimates, and local HTTP API while backporting provider fixes (such as Antigravity's updated Cloud Code quota endpoints and Argon weekly quota). Releases are ad-hoc signed Apple Silicon (`arm64`) builds with Sparkle auto-updates and iCloud sync disabled.
+
 Track your AI coding subscriptions from the macOS menu bar — native Swift edition.
 
 OpenUsage shows how much of your AI coding plans you've used: session and weekly limits, credits, and spend, all in one popover. Pin your most important metrics straight into the menu bar.
@@ -13,16 +16,22 @@ OpenUsage shows how much of your AI coding plans you've used: session and weekly
 **Homebrew:**
 
 ```sh
-brew install --cask openusage
+brew install --cask manojkarthick/tap/openusage
 ```
 
-**Direct download:** grab the latest universal DMG from the [releases page](https://github.com/robinebers/openusage/releases/latest), open it, and drag OpenUsage to your Applications folder.
+If you already have an older `OpenUsage.app` in `/Applications`, pass `--force` to replace it. The cask also clears the macOS quarantine attribute automatically and links the `openusage` CLI to `/opt/homebrew/bin/openusage`.
 
-Either way, the app updates itself in place via signed, notarized [Sparkle](docs/updates.md) updates. Requires macOS 15 (Sequoia) or later.
+**Direct download:** grab the latest `arm64` DMG from the [releases page](https://github.com/manojkarthick/openusage/releases/latest), drag `OpenUsage.app` to `/Applications`, and clear the quarantine flag since builds are ad-hoc signed:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/OpenUsage.app
+```
+
+Requires macOS 15 (Sequoia) or later on Apple Silicon (`arm64`). Updates are delivered via Homebrew (`brew upgrade --cask openusage`) rather than Sparkle.
 
 ## Supported Providers
 
-- **[Antigravity](docs/providers/antigravity.md)** — shared Gemini and Claude pool quotas, 5-hour and weekly windows
+- **[Antigravity](docs/providers/antigravity.md)** — shared Gemini and Claude pool quotas (5-hour and weekly) plus Gemini 4 Argon weekly quota
 - **[Claude](docs/providers/claude.md)** — session, weekly, model-specific limits, extra usage, local daily spend
 - **[Codex](docs/providers/codex.md)** — session, weekly, credits, local daily spend
 - **[Copilot](docs/providers/copilot.md)** — AI credits, extra usage, organization billing, chat and completions
@@ -47,7 +56,6 @@ Most providers read the credentials already on your machine (keychain, auth file
 - **[Local HTTP API](docs/local-http-api.md).** Other apps can read machine-friendly limits from `127.0.0.1:6736/v1/limits`; the legacy `/v1/usage` UI contract remains supported. It is loopback-only and never serves credentials; note that browser pages can read it too — see the [privacy note](docs/local-http-api.md#cors-and-privacy).
 - **[Proxy support](docs/proxy.md).** Route provider requests through SOCKS5 or HTTP(S) via `~/.openusage/config.json`.
 - **Native settings.** Launch at login, global shortcut, icon style, theme, density, 12/24-hour time — see [Settings](docs/settings.md).
-- **[Automatic updates](docs/updates.md).** Signed, notarized in-app updates via Sparkle, with an optional beta channel.
 
 
 
@@ -60,7 +68,7 @@ For working on the code, see the developer docs: [architecture](docs/architectur
 ## Requirements
 
 - macOS 15 (Sequoia) or later
-- Universal binary — runs natively on both Apple Silicon and Intel Macs
+- Apple Silicon (`arm64`)
 
 The Today / Yesterday / Last 30 Days spend tiles are computed natively from local CLI logs (Claude,
 Codex, and Grok) or Cursor's usage export — no Node.js or other runtime needed. Dollars are estimated
@@ -84,38 +92,15 @@ SwiftPM package, SwiftUI content hosted in an AppKit-owned `NSStatusItem` + cust
 
 ## Releasing
 
-Releases are automated: pushing a `v*` tag on `main` builds, signs, notarizes, and publishes a new version. A plain tag (`v0.7.1`) ships to everyone; a pre-release suffix (`v0.7.1-beta.1`) ships to the beta channel. The pipeline lives in [.github/workflows/release.yml](.github/workflows/release.yml), and the step-by-step is in the `release-swift` skill.
+Pushing a `v*` tag from `v0.7` runs [.github/workflows/release.yml](.github/workflows/release.yml), which executes `swift test`, builds an `arm64` ad-hoc signed DMG via [script/release.sh](script/release.sh), and publishes it to GitHub Releases. No signing, notarization, or Sparkle secrets are required.
 
-### Release setup (one-time)
+To ship a new release and update the Homebrew cask:
 
-The release workflow needs these repository secrets (Settings → Secrets and variables → Actions):
+```sh
+git tag v0.7.x && git push origin v0.7.x
+```
 
-
-| Secret                       | What it is                                                            |
-| ---------------------------- | --------------------------------------------------------------------- |
-| `APPLE_CERTIFICATE`          | base64 of your Developer ID Application `.p12`                        |
-| `APPLE_CERTIFICATE_PASSWORD` | the password set when exporting that `.p12`                           |
-| `APPLE_ID`                   | the Apple ID email used for notarization                              |
-| `APPLE_PASSWORD`             | an app-specific password for that Apple ID                            |
-| `APPLE_TEAM_ID`              | your Apple Developer team ID                                          |
-| `APPLE_DEVELOPER_ID_ICLOUD_PROFILE` | base64 Developer ID provisioning profile for the production iCloud container |
-| `SPARKLE_PUBLIC_KEY`         | base64 EdDSA public key, baked into the build as `SUPublicEDKey`      |
-| `SPARKLE_PRIVATE_KEY`        | base64 EdDSA private key used to sign the DMG                         |
-| `POSTHOG_CLI_API_KEY`        | PostHog personal API key used to upload dSYMs for crash symbolication |
-| `POSTHOG_CLI_PROJECT_ID`     | numeric PostHog project ID the dSYMs upload to                        |
-
-
-Export the Developer ID Application cert (with its private key) from Keychain Access as a `.p12`, then `base64 -i DeveloperID.p12 | pbcopy`. App-specific passwords come from appleid.apple.com → Sign-In and Security → App-Specific Passwords. Generate the Sparkle EdDSA key pair once with Sparkle's `generate_keys` tool; the public and private values must be a matching pair or signing is silently skipped.
-
-For iCloud Sync, store the original development and Developer ID provisioning profiles in 1Password as secure documents. Install the development profile on each registered Mac; base64-encode the Developer ID profile and store it only in the `APPLE_DEVELOPER_ID_ICLOUD_PROFILE` Actions secret. See [iCloud Sync](docs/icloud-sync.md#development-and-release-setup) for the container identifiers, build command, and file-inspection command.
-
-The two `POSTHOG_CLI_*` secrets are only used to upload debug symbols (dSYMs) so PostHog can symbolicate crash reports: `POSTHOG_CLI_API_KEY` is a PostHog personal API key (PostHog → Settings → Personal API keys) and `POSTHOG_CLI_PROJECT_ID` is the numeric ID from your project URL. The upload host is hardcoded in the workflow (`https://us.i.posthog.com`), so there is no `POSTHOG_CLI_HOST` secret. Unlike the secrets above these don't block a release — if `POSTHOG_CLI_API_KEY` is unset the workflow skips the upload with a warning and the release still ships, but crash reports for that version show raw addresses instead of symbolicated stack traces.
-
-The repository must be public (Sparkle fetches the DMG and appcast anonymously), and the appcast is served from GitHub Pages — confirm Settings → Pages points at the `gh-pages` branch after the first release.
-
-## Contributing
-
-Issues are welcome. Pull requests are **strict and issue-first**: comment on an issue, wait for a maintainer to add the `approved` label and assign it to you, then reference it in your PR with `Fixes #123`. Automation closes external PRs without an approved issue assigned to their author, and warns when an accepted PR adds more than 1,000 lines. Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening one. Report security issues privately per [SECURITY.md](SECURITY.md). The OpenUsage name and logo are covered by the [trademark policy](TRADEMARK.md).
+Then update the `version` and `sha256` in `manojkarthick/homebrew-tap` (`Casks/openusage.rb`).
 
 ## License
 
