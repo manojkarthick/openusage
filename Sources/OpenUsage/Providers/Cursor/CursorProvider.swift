@@ -65,8 +65,9 @@ final class CursorProvider: ProviderRuntime {
     }
 
     func hasLocalCredentials() async -> Bool {
-        // Same source as `refresh()`: any auth state (state DB or keychain) counts.
-        await loadOffMainActor { [authStore] in authStore.loadAuthState() } != nil
+        // Same sources as `refresh()` (state DB or keychain), without triggering a Keychain popup
+        // for Cursor Safe Storage during first-run detection.
+        await loadOffMainActor { [authStore] in authStore.hasCredentialMaterial() }
     }
 
     func refresh() async -> ProviderSnapshot {
@@ -330,8 +331,9 @@ final class CursorProvider: ProviderRuntime {
         // it loud without risking a token leak. The refreshed token still works for this session.
         do {
             let source = authState.source
-            try await loadOffMainActor { [authStore, accessToken, source] in
-                try authStore.saveAccessToken(accessToken, source: source)
+            let isSealed = authState.isSealed
+            try await loadOffMainActor { [authStore, accessToken, source, isSealed] in
+                try authStore.saveAccessToken(accessToken, source: source, sealed: isSealed)
             }
         } catch {
             AppLog.error(LogTag.auth("cursor"), "failed to persist rotated access token to the Cursor state DB; using it for this session only")

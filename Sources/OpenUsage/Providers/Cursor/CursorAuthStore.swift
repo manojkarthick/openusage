@@ -11,6 +11,8 @@ struct CursorAuthState: Hashable, Sendable {
     /// Lowercased `cursorAuth/stripeMembershipType` from the Cursor state DB when present.
     var membershipType: String?
     var source: Source
+    /// True when the loaded SQLite editor login used Cursor's `cursor-safe-storage` sealing.
+    var isSealed: Bool = false
 }
 
 enum CursorAuthError: Error, LocalizedError, Equatable {
@@ -41,21 +43,37 @@ struct CursorAuthStore: Sendable {
 
     var sqlite: SQLiteAccessing
     var keychain: KeychainAccessing
+    var safeStorageKey: any CursorSafeStorageKeyReading
     var now: @Sendable () -> Date
 
     init(
         sqlite: SQLiteAccessing = SQLiteCLIAccessor(),
         keychain: KeychainAccessing = SecurityKeychainAccessor(),
+        safeStorageKey: any CursorSafeStorageKeyReading = CursorSafeStorageKeyReader(),
         now: @escaping @Sendable () -> Date = Date.init
     ) {
         self.sqlite = sqlite
         self.keychain = keychain
+        self.safeStorageKey = safeStorageKey
         self.now = now
     }
 
+    /// Cheap, prompt-free local credential probe for first-run detection. Recognizes sealed editor
+    /// cells without prompting for the Safe Storage Keychain item; `refresh()` opens the seal.
+    func hasCredentialMaterial() -> Bool {
+        if readStateValue(Self.accessTokenKey) != nil || readStateValue(Self.refreshTokenKey) != nil {
+            return true
+        }
+        return readKeychainValue(Self.keychainAccessTokenService) != nil
+            || readKeychainValue(Self.keychainRefreshTokenService) != nil
+    }
+
     func loadAuthState() -> CursorAuthState? {
-        let sqliteAccessToken = readStateValue(Self.accessTokenKey)
-        let sqliteRefreshToken = readStateValue(Self.refreshTokenKey)
+        let rawAccess = readStateValue(Self.accessTokenKey)
+        let rawRefresh = readStateValue(Self.refreshTokenKey)
+        let editorTokens = usableEditorTokens(access: rawAccess, refresh: rawRefresh)
+        let sqliteAccessToken = editorTokens.access
+        let sqliteRefreshToken = editorTokens.refresh
         let sqliteMembershipType = readStateValue(Self.membershipTypeKey)?
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased()
@@ -85,7 +103,8 @@ struct CursorAuthStore: Sendable {
                 accessToken: sqliteAccessToken,
                 refreshToken: sqliteRefreshToken,
                 membershipType: sqliteMembershipType,
-                source: .sqlite
+                source: .sqlite,
+                isSealed: editorTokens.wasSealed
             )
         }
 
@@ -112,20 +131,70 @@ struct CursorAuthStore: Sendable {
         return expiresAt.timeIntervalSince(now()) <= Self.refreshBufferSeconds
     }
 
-    func saveAccessToken(_ accessToken: String, source: CursorAuthState.Source) throws {
+    func saveAccessToken(_ accessToken: String, source: CursorAuthState.Source, sealed: Bool = false) throws {
         switch source {
         case .sqlite:
-            try writeStateValue(Self.accessTokenKey, accessToken)
+            // Fail closed on read errors so a transient SQLite failure never overwrites a sealed
+            // editor cell with plaintext.
+            let existing = try tryReadStateValue(Self.accessTokenKey)
+            let shouldSeal = sealed || existing.map(CursorSealedToken.isSealed) == true
+            if shouldSeal {
+                guard let password = try safeStorageKey.readPassword() else {
+                    throw CursorSealedTokenError.missingKey
+                }
+                try writeStateValue(Self.accessTokenKey, CursorSealedToken.seal(token: accessToken, password: password))
+            } else {
+                try writeStateValue(Self.accessTokenKey, accessToken)
+            }
         case .keychain:
             try keychain.writeGenericPassword(service: Self.keychainAccessTokenService, value: accessToken)
         }
     }
 
-    private func readStateValue(_ key: String) -> String? {
+    /// Plaintext JWTs pass through. Sealed cells are opened with the safeStorage
+    /// password, once for the pair. A cell that cannot be opened becomes nil so
+    /// it is never sent to Cursor as a refresh token (`shouldLogout`), and the
+    /// CLI keychain login can still be used.
+    private func usableEditorTokens(access: String?, refresh: String?) -> (access: String?, refresh: String?, wasSealed: Bool) {
+        let accessSealed = access.map(CursorSealedToken.isSealed) == true
+        let refreshSealed = refresh.map(CursorSealedToken.isSealed) == true
+        let needsKey = accessSealed || refreshSealed
+        guard needsKey else { return (access, refresh, false) }
+
+        let password: String?
+        do {
+            password = try safeStorageKey.readPassword()
+        } catch {
+            AppLog.warn(LogTag.auth("cursor"), "Cursor Safe Storage key could not be read")
+            password = nil
+        }
+        func open(_ stored: String?) -> String? {
+            guard let stored else { return nil }
+            guard CursorSealedToken.isSealed(stored) else { return stored }
+            guard let password else { return nil }
+            return CursorSealedToken.open(stored: stored, password: password)
+        }
+        let openedAccess = open(access)
+        let openedRefresh = open(refresh)
+        let failed = (accessSealed && openedAccess == nil) || (refreshSealed && openedRefresh == nil)
+        if failed {
+            let reason = password == nil
+                ? "Cursor login is sealed and the Safe Storage key is unavailable"
+                : "Cursor login is sealed and the Safe Storage key could not open it"
+            AppLog.warn(LogTag.auth("cursor"), reason)
+        }
+        return (openedAccess, openedRefresh, true)
+    }
+
+    private func tryReadStateValue(_ key: String) throws -> String? {
         let sql = "SELECT value FROM ItemTable WHERE key = '\(Self.sqlEscaped(key))' LIMIT 1;"
-        guard let value = try? sqlite.queryValue(path: Self.stateDBPath, sql: sql) else { return nil }
+        guard let value = try sqlite.queryValue(path: Self.stateDBPath, sql: sql) else { return nil }
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private func readStateValue(_ key: String) -> String? {
+        try? tryReadStateValue(key)
     }
 
     private func writeStateValue(_ key: String, _ value: String) throws {
