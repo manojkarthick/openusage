@@ -14,6 +14,10 @@ struct WidgetData: Hashable {
     static let noDataHeadline = "—"
     /// Subtitle shown on a placed tile with no real backing metric. Copy is intentionally exact.
     static let noDataSubtitle = "No data"
+    /// Subtitle shown when the provider responded cleanly and this account/plan does not report the metric.
+    static let notApplicableSubtitle = "Not on plan"
+    /// Subtitle shown when the request or local source backing the metric failed.
+    static let loadFailedSubtitle = "Couldn't load"
 
     let title: String          // "Claude 5h", "Cursor credits"
     let icon: IconSource
@@ -58,9 +62,11 @@ struct WidgetData: Hashable {
     var infoNote: String?
     /// Optional source note for value rows such as Cursor spend history.
     var valueTooltipNote: String?
-    /// False when no real provider metric backs this tile. The view then shows a "No data" state
+    /// False when no real provider metric backs this tile. The view then shows an empty state
     /// instead of the descriptor's placeholder template numbers. True for real data and direct fixtures.
     var hasData: Bool = true
+    /// Optional reason why `hasData` is false (`notApplicable` vs `loadFailed`); `nil` renders "No data".
+    var unavailableReason: MetricUnavailableReason?
     /// Raw numbers for an unbounded `.values` row (empty for meters). The view
     /// formats these at render time instead of reading a baked string — see `unboundedDetail`.
     var values: [MetricValue] = []
@@ -314,11 +320,25 @@ struct WidgetData: Hashable {
         return isBounded ? boundedHeadline : valueText
     }
 
+    /// Text shown in place of a value/subtitle when `hasData` is false.
+    var emptyStateLabel: String {
+        switch unavailableReason {
+        case .notApplicable: return Self.notApplicableSubtitle
+        case .loadFailed: return Self.loadFailedSubtitle
+        case nil: return Self.noDataSubtitle
+        }
+    }
+
+    /// True when the row has no value specifically because its backing request or source failed.
+    var isLoadFailed: Bool {
+        !hasData && unavailableReason == .loadFailed
+    }
+
     /// Right-aligned descriptive line for an unbounded row (no bar): just "<value> <word>". The word is
     /// `unboundedValueWord` when set (extras always read "1,503 left", spend rows "$12.34 spent");
     /// otherwise it falls back to the global left/used mode word.
     var unboundedDetail: String {
-        guard hasData else { return Self.noDataSubtitle }
+        guard hasData else { return emptyStateLabel }
         if let valueTextOverride { return valueTextOverride }
         let selected = selectedValues
         if !selected.isEmpty {
@@ -567,7 +587,7 @@ extension WidgetData {
     /// `boundedSubtitle`, but a concrete reset honors `resetDisplayMode` (relative ⟷ absolute).
     /// Claude and Antigravity session rows show "Not started" while the rolling window has not begun.
     func boundedTrailingText(now: Date = Date()) -> String? {
-        guard hasData else { return Self.noDataSubtitle }
+        guard hasData else { return emptyStateLabel }
         if let subtitleOverride { return subtitleOverride }
         if isFreshSessionWindow(now: now) { return "Not started" }
         if let resetsAt {

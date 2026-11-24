@@ -26,11 +26,25 @@ enum CursorUsageEventsError: Error, Equatable {
 
 enum CursorUsageEvents {
     static func parsePage(_ data: Data) throws -> CursorUsageEventsPage {
-        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let totalCount = integer(object["totalUsageEventsCount"]),
-              totalCount >= 0,
-              let rawEvents = object["usageEventsDisplay"] as? [Any]
+        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw CursorUsageEventsError.invalidResponse
+        }
+        // Cursor's proto3-JSON endpoint omits default values (`totalUsageEventsCount: 0` and
+        // `usageEventsDisplay: []`) on zero-usage days, returning `{}` (or `{"totalUsageEventsCount": 0}`).
+        if object.isEmpty {
+            return CursorUsageEventsPage(events: [], totalCount: 0, rejectedEventCount: 0)
+        }
+        guard let totalCount = integer(object["totalUsageEventsCount"]),
+              totalCount >= 0
         else {
+            throw CursorUsageEventsError.invalidResponse
+        }
+        let rawEvents: [Any]
+        if let list = object["usageEventsDisplay"] as? [Any] {
+            rawEvents = list
+        } else if totalCount == 0 && object["usageEventsDisplay"] == nil {
+            rawEvents = []
+        } else {
             throw CursorUsageEventsError.invalidResponse
         }
 

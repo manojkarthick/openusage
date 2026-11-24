@@ -132,30 +132,35 @@ final class CursorProvider: ProviderRuntime {
             planInfoUnavailable: planInfoUnavailable
         )
         if fallback.shouldFallback {
+            var unavailableMetrics: [String: MetricUnavailableReason] = [:]
             var mapped = try await usageSummaryAndRequestResult(
                 accessToken: currentToken,
                 planName: displayPlanName ?? routingPlanName,
-                unavailableMessage: fallback.message
+                unavailableMessage: fallback.message,
+                unavailableMetrics: &unavailableMetrics
             )
-            await appendGrokBotUsage(to: &mapped.lines, accessToken: currentToken)
-            let history = await appendSpendLines(to: &mapped.lines, accessToken: currentToken)
-            return snapshot(mapped, usageHistory: history)
+            await appendGrokBotUsage(to: &mapped.lines, unavailableMetrics: &unavailableMetrics, accessToken: currentToken)
+            let history = await appendSpendLines(to: &mapped.lines, unavailableMetrics: &unavailableMetrics, accessToken: currentToken)
+            return snapshot(mapped, usageHistory: history, unavailableMetrics: unavailableMetrics)
         }
 
         if shouldTryGenericRequestFallback(usage: usage) {
             do {
+                var unavailableMetrics: [String: MetricUnavailableReason] = [:]
                 var mapped = try await requestBasedResult(
                     accessToken: currentToken,
                     planName: displayPlanName ?? routingPlanName,
                     unavailableMessage: "Cursor request-based usage data unavailable. Try again later."
                 )
-                await appendGrokBotUsage(to: &mapped.lines, accessToken: currentToken)
-                return snapshot(mapped)
+                markMissing(["Cursor Models", "Other Models", "On-demand"], in: mapped.lines, as: .notApplicable, into: &unavailableMetrics)
+                await appendGrokBotUsage(to: &mapped.lines, unavailableMetrics: &unavailableMetrics, accessToken: currentToken)
+                return snapshot(mapped, unavailableMetrics: unavailableMetrics)
             } catch {
                 AppLog.warn(LogTag.plugin("cursor"), "optional request-based usage fallback failed")
             }
         }
 
+        var unavailableMetrics: [String: MetricUnavailableReason] = [:]
         let creditGrants = await fetchCreditGrants(accessToken: currentToken)
         let stripeBalanceCents = await fetchStripeBalanceCents(accessToken: currentToken)
         var mapped = try CursorUsageMapper.mapUsage(
@@ -168,16 +173,18 @@ final class CursorProvider: ProviderRuntime {
             planInfoName: planInfoName,
             membershipType: authState.membershipType
         )
+        markMissing(["Cursor Models", "Other Models", "Requests"], in: mapped.lines, as: .notApplicable, into: &unavailableMetrics)
         await enrichPrimaryUsageFromSummaryIfNeeded(
             accessToken: currentToken,
             usage: usage,
             planInfoName: planInfoName,
             membershipType: authState.membershipType,
-            mapped: &mapped
+            mapped: &mapped,
+            unavailableMetrics: &unavailableMetrics
         )
-        await appendGrokBotUsage(to: &mapped.lines, accessToken: currentToken)
-        let history = await appendSpendLines(to: &mapped.lines, accessToken: currentToken)
-        return snapshot(mapped, usageHistory: history)
+        await appendGrokBotUsage(to: &mapped.lines, unavailableMetrics: &unavailableMetrics, accessToken: currentToken)
+        let history = await appendSpendLines(to: &mapped.lines, unavailableMetrics: &unavailableMetrics, accessToken: currentToken)
+        return snapshot(mapped, usageHistory: history, unavailableMetrics: unavailableMetrics)
     }
 
     /// Model-pool Enterprise/team seats often keep a usable primary usage payload but omit on-demand
@@ -187,7 +194,8 @@ final class CursorProvider: ProviderRuntime {
         usage: [String: Any],
         planInfoName: String?,
         membershipType: String?,
-        mapped: inout CursorMappedUsage
+        mapped: inout CursorMappedUsage,
+        unavailableMetrics: inout [String: MetricUnavailableReason]
     ) async {
         let needsOnDemand = !mapped.lines.contains(where: { $0.label == "On-demand" })
         let facts = CursorPlanUsageFacts(usage: usage)
@@ -200,14 +208,17 @@ final class CursorProvider: ProviderRuntime {
         guard let summary = await fetchOptionalJSONObject(label: "usage-summary", request: {
             try await self.usageClient.fetchUsageSummary(accessToken: accessToken)
         }) else {
+            if needsOnDemand { unavailableMetrics["On-demand"] = .loadFailed }
             return
         }
         if !CursorUsageSummaryMapper.hasUsableSummaryPayload(summary) {
             AppLog.warn(LogTag.plugin("cursor"), "optional usage-summary response contained no usable usage fields")
+            if needsOnDemand { unavailableMetrics["On-demand"] = .loadFailed }
             return
         }
         if needsOnDemand {
             CursorUsageSummaryMapper.appendMissingOnDemand(from: summary, to: &mapped.lines)
+            markMissing(["On-demand"], in: mapped.lines, as: .notApplicable, into: &unavailableMetrics)
         }
         let summaryMembership = (summary["membershipType"] as? String)?
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -223,22 +234,31 @@ final class CursorProvider: ProviderRuntime {
 
     /// Grok Bot uses the same Cursor account but keeps a separate weekly allowance. Missing access is
     /// normal for ineligible accounts; malformed data and request failures remain visible in diagnostics.
-    private func appendGrokBotUsage(to lines: inout [MetricLine], accessToken: String) async {
+    private func appendGrokBotUsage(
+        to lines: inout [MetricLine],
+        unavailableMetrics: inout [String: MetricUnavailableReason],
+        accessToken: String
+    ) async {
         guard let usage = await fetchOptionalJSONObject(label: "Grok Bot usage", request: {
             try await self.usageClient.fetchGrokBotUsage(accessToken: accessToken)
         }) else {
+            unavailableMetrics["Grok Bot usage"] = .loadFailed
             return
         }
         guard usage["usesPooledEnterpriseAllowance"] as? Bool != true,
               usage["hasNonZeroIncludedLimit"] as? Bool != false,
               usage["includedLimitZero"] as? Bool != true
         else {
+            unavailableMetrics["Grok Bot usage"] = .notApplicable
             return
         }
         guard let line = CursorUsageMapper.mapGrokBotUsage(usage) else {
             if usage["usagePercent"] != nil || usage["hasNonZeroIncludedLimit"] as? Bool == true ||
                 usage["hasAvailableUsage"] as? Bool == true {
                 AppLog.warn(LogTag.plugin("cursor"), "optional Grok Bot usage response contained invalid usage metadata")
+                unavailableMetrics["Grok Bot usage"] = .loadFailed
+            } else {
+                unavailableMetrics["Grok Bot usage"] = .notApplicable
             }
             return
         }
@@ -246,9 +266,15 @@ final class CursorProvider: ProviderRuntime {
     }
 
     /// Spend history is best-effort and never affects the live Cursor usage mapping.
-    private func appendSpendLines(to lines: inout [MetricLine], accessToken: String) async -> ProviderUsageHistory? {
+    private func appendSpendLines(
+        to lines: inout [MetricLine],
+        unavailableMetrics: inout [String: MetricUnavailableReason],
+        accessToken: String
+    ) async -> ProviderUsageHistory? {
+        let spendLabels = ["Usage Trend", "Today", "Yesterday", "Last 30 Days"]
         guard let session = CursorUsageClient.session(from: accessToken) else {
             AppLog.warn(LogTag.plugin("cursor"), "usage events could not be prepared from the current session")
+            markMissing(spendLabels, in: lines, as: .loadFailed, into: &unavailableMetrics)
             return nil
         }
         let currentTime = now()
@@ -262,6 +288,7 @@ final class CursorProvider: ProviderRuntime {
             userID: session.userID,
             now: currentTime
         ) else {
+            markMissing(spendLabels, in: lines, as: .loadFailed, into: &unavailableMetrics)
             return nil
         }
         let pricing = await pricing()
@@ -443,39 +470,71 @@ final class CursorProvider: ProviderRuntime {
     private func usageSummaryAndRequestResult(
         accessToken: String,
         planName: String?,
-        unavailableMessage: String
+        unavailableMessage: String,
+        unavailableMetrics: inout [String: MetricUnavailableReason]
     ) async throws -> CursorMappedUsage {
         let summary = await fetchOptionalJSONObject(label: "usage-summary", request: {
             try await self.usageClient.fetchUsageSummary(accessToken: accessToken)
         })
-        if let summary, !CursorUsageSummaryMapper.hasUsableSummaryPayload(summary) {
+        let summaryUsable = summary.map(CursorUsageSummaryMapper.hasUsableSummaryPayload) ?? false
+        if summary != nil, !summaryUsable {
             AppLog.warn(LogTag.plugin("cursor"), "optional usage-summary response contained no usable usage fields")
         }
         let requestUsage = await fetchOptionalJSONObject(label: "request-based usage", request: {
             try await self.usageClient.fetchRequestBasedUsage(accessToken: accessToken)
         })
-        if let requestUsage, !CursorUsageSummaryMapper.hasUsableRequestPayload(requestUsage) {
+        let requestUsable = requestUsage.map(CursorUsageSummaryMapper.hasUsableRequestPayload) ?? false
+        if requestUsage != nil, !requestUsable {
             AppLog.warn(LogTag.plugin("cursor"), "optional request-based usage response contained no usable usage fields")
         }
-        return try CursorUsageSummaryMapper.map(
+        let mapped = try CursorUsageSummaryMapper.map(
             summary: summary,
             requestUsage: requestUsage,
             planName: planName,
             unavailableMessage: unavailableMessage
         )
+        markMissing(
+            ["Cursor Models", "Other Models", "On-demand"],
+            in: mapped.lines,
+            as: summaryUsable ? .notApplicable : .loadFailed,
+            into: &unavailableMetrics
+        )
+        markMissing(
+            ["Requests"],
+            in: mapped.lines,
+            as: requestUsable ? .notApplicable : .loadFailed,
+            into: &unavailableMetrics
+        )
+        return mapped
+    }
+
+    private func markMissing(
+        _ labels: [String],
+        in lines: [MetricLine],
+        as reason: MetricUnavailableReason,
+        into unavailableMetrics: inout [String: MetricUnavailableReason]
+    ) {
+        for label in labels where !lines.contains(where: { $0.label == label }) {
+            unavailableMetrics[label] = reason
+        }
     }
 
     private func shouldTryGenericRequestFallback(usage: [String: Any]) -> Bool {
         CursorPlanUsageFacts(usage: usage).shouldTryGenericRequestFallback
     }
 
-    private func snapshot(_ mapped: CursorMappedUsage, usageHistory: ProviderUsageHistory? = nil) -> ProviderSnapshot {
+    private func snapshot(
+        _ mapped: CursorMappedUsage,
+        usageHistory: ProviderUsageHistory? = nil,
+        unavailableMetrics: [String: MetricUnavailableReason] = [:]
+    ) -> ProviderSnapshot {
         ProviderSnapshot.make(
             provider: provider,
             plan: mapped.plan,
             lines: mapped.lines,
             refreshedAt: now(),
-            usageHistory: usageHistory
+            usageHistory: usageHistory,
+            unavailableMetrics: unavailableMetrics
         )
     }
 }

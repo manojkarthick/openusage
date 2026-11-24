@@ -193,6 +193,9 @@ enum UsageHistorySnapshotRenderer {
     ) -> ProviderSnapshot {
         var result = snapshot
         result.lines.removeAll { historyLabels.contains($0.label) }
+        for label in historyLabels {
+            result.unavailableMetrics.removeValue(forKey: label)
+        }
         let baseNote = combined ? "Across your Macs · \(descriptor.sourceNote)" : descriptor.sourceNote
         SpendTileMapper.appendTokenUsage(
             history.series,

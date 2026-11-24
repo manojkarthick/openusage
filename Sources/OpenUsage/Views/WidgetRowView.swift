@@ -251,6 +251,14 @@ struct WidgetRowView: View {
                 }
                 .buttonStyle(.plain)
                 .hoverTooltip(data.resetTooltip())
+            } else if data.isLoadFailed {
+                HStack(spacing: 3) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: density.supportingPointSize - 1))
+                        .foregroundStyle(Theme.notice)
+                        .accessibilityHidden(true)
+                    Text(text).foregroundStyle(.secondary)
+                }
             } else {
                 Text(text).foregroundStyle(.secondary)
                     .hoverTooltip(data.resetTooltip())
@@ -301,9 +309,15 @@ struct WidgetRowView: View {
             VStack(alignment: .trailing, spacing: 2) {
                 HStack(spacing: 4) {
                     expiryStatusDot
+                    if data.isLoadFailed {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: density.supportingPointSize - 1))
+                            .foregroundStyle(Theme.notice)
+                            .accessibilityHidden(true)
+                    }
                     Text(data.unboundedDetail)
                         .font(supportingFont)
-                        .foregroundStyle(.primary) // the value is the row's payload — match the bounded headline
+                        .foregroundStyle(data.hasData ? .primary : .secondary)
                         .contentTransition(.numericText())
                         .lineLimit(1)
                         .fixedSize(horizontal: true, vertical: false)

@@ -47,7 +47,7 @@ Today, Yesterday, Last 30 Days, and Usage Trend come from Cursor's usage history
 
 - **"Not logged in" / token errors** — open Cursor and make sure you're signed in, then refresh.
 - **Keychain prompt for "Cursor Safe Storage"** — allow it so the sealed editor login can be read. Denying it leaves the card on the CLI login, or on "Not logged in" when there is no CLI login either. Refresh asks again after a denial.
-- **Some metrics missing** — Cursor omits fields depending on plan type; missing metrics simply show "No data".
+- **Some metrics missing** — Cursor omits fields depending on plan type (for example, token-based Enterprise plans omit Cursor Models, Other Models, and separate Grok Bot quotas). Omitted plan metrics read "Not on plan", zero-usage periods read "No data", and failed optional lookups read "Couldn't load".
 - **Optional lookup failed** — Grok Bot, plan, credit-grant, prepaid-balance, and request-fallback failures stay nonfatal when primary usage is available. OpenUsage records fixed, credential-free reasons in the diagnostic log.
 
 ## Under the hood

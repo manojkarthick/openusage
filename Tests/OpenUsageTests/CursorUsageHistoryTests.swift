@@ -53,9 +53,25 @@ final class CursorUsageEventsParserTests: XCTestCase {
         XCTAssertThrowsError(try CursorUsageEvents.parsePage(missingTotal)) { error in
             XCTAssertEqual(error as? CursorUsageEventsError, .invalidResponse)
         }
+        let errorPayload = try JSONSerialization.data(withJSONObject: ["error": "unauthorized"])
+        XCTAssertThrowsError(try CursorUsageEvents.parsePage(errorPayload)) { error in
+            XCTAssertEqual(error as? CursorUsageEventsError, .invalidResponse)
+        }
+        let positiveWithoutEvents = try JSONSerialization.data(withJSONObject: ["totalUsageEventsCount": 2])
+        XCTAssertThrowsError(try CursorUsageEvents.parsePage(positiveWithoutEvents)) { error in
+            XCTAssertEqual(error as? CursorUsageEventsError, .invalidResponse)
+        }
         XCTAssertThrowsError(try CursorUsageEvents.parsePage(Data("[]".utf8))) { error in
             XCTAssertEqual(error as? CursorUsageEventsError, .invalidResponse)
         }
+    }
+
+    func testAcceptsEmptyProto3JSONPagesOnIdleDays() throws {
+        let emptyObject = try CursorUsageEvents.parsePage(Data("{}".utf8))
+        XCTAssertEqual(emptyObject, CursorUsageEventsPage(events: [], totalCount: 0, rejectedEventCount: 0))
+
+        let zeroWithoutEvents = try CursorUsageEvents.parsePage(Data(#"{"totalUsageEventsCount":0}"#.utf8))
+        XCTAssertEqual(zeroWithoutEvents, CursorUsageEventsPage(events: [], totalCount: 0, rejectedEventCount: 0))
     }
 }
 
@@ -162,6 +178,34 @@ final class CursorUsageHistoryTests: XCTestCase {
         XCTAssertFalse(try XCTUnwrap(savedDays[dayStarts[0].key]).isComplete)
         XCTAssertTrue(try XCTUnwrap(savedDays[dayStarts[1].key]).isComplete)
         XCTAssertTrue((try FileManager.default.contentsOfDirectory(atPath: directory.path)).contains { $0.hasSuffix(".json") })
+    }
+
+    func testBackfillSucceedsWhenIdleDaysReturnEmptyJSONObject() async throws {
+        let (store, directory) = makeStore()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let now = self.now
+        let todayKey = dayStarts(now: now)[0].key
+        let http = historyHTTP { request in
+            guard let params = CursorHistoryTestData.parameters(request) else {
+                return CursorHistoryTestData.invalidRequest
+            }
+            if params.startKey == todayKey {
+                let event = CursorHistoryTestData.event(on: params.start, model: "composer-1", input: 10_000)
+                return try CursorHistoryTestData.page(total: 1, events: params.page == 1 ? [event] : [])
+            }
+            return HTTPResponse(statusCode: 200, headers: [:], body: Data("{}".utf8))
+        }
+        let provider = makeProvider(http: http, store: store, now: now)
+
+        let snapshot = await provider.refresh()
+
+        XCTAssertNotNil(snapshot.lines.first { $0.label == "Today" })
+        XCTAssertNotNil(snapshot.lines.first { $0.label == "Last 30 Days" })
+        XCTAssertNotNil(snapshot.lines.first { $0.label == "Usage Trend" })
+        XCTAssertNil(snapshot.lines.first { $0.label == "Yesterday" })
+        // Yesterday had genuinely zero usage, not a failed fetch.
+        XCTAssertNil(snapshot.unavailableMetrics["Yesterday"])
+        XCTAssertEqual(store.load(userID: userID, timeZone: Calendar.current.timeZone.identifier).count, 30)
     }
 
     func testIncrementalRefreshOnlyRequestsTodayAndYesterday() async throws {
@@ -295,6 +339,9 @@ final class CursorUsageHistoryTests: XCTestCase {
         let persistedAfterDeadline = store.load(userID: userID, timeZone: Calendar.current.timeZone.identifier)
         XCTAssertTrue(firstSnapshot.lines.contains { $0.label == "Total usage" }, "live plan usage must survive spend-history timeout")
         XCTAssertNil(firstSnapshot.usageHistory)
+        for label in ["Usage Trend", "Today", "Yesterday", "Last 30 Days"] {
+            XCTAssertEqual(firstSnapshot.unavailableMetrics[label], .loadFailed, label)
+        }
         XCTAssertLessThan(elapsed, .seconds(2))
         XCTAssertGreaterThan(persistedAfterDeadline.count, 0)
         XCTAssertLessThan(persistedAfterDeadline.count, 30)
