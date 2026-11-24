@@ -68,6 +68,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         // the instance guard above stays as the referee for the remaining triggers. Runs after the
         // guard on purpose, so only the surviving copy touches the file.
         LegacyLaunchAgentCleanup.removeLeftoverAgent()
+        // Builds before the PostHog removal left IDs, queued events and crash reports on disk.
+        TelemetryLeftoverCleanup.removeLeftovers()
         // App-wide theme override (NSApp.appearance): the popover ignores SwiftUI's
         // preferredColorScheme, so the override is applied at the AppKit level once at launch;
         // the Theme picker on the Settings screen re-applies it on change.

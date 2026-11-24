@@ -18,7 +18,7 @@ struct SettingsMigration: Sendable {
 enum SettingsSchema {
     /// Current schema version. Keep equal to the highest migration `version` below (or the baseline when
     /// there are none). This is NOT the app version — bump it only alongside a migration you add.
-    static let current = 3
+    static let current = 4
 
     /// The provider IDs that existed when the v2 migration shipped, frozen forever. A migration is a
     /// point-in-time transform: any future build with more providers also contains this migration, so a
@@ -70,6 +70,14 @@ enum SettingsSchema {
             remapJSONMetricIDArray(defaults, key: "openusage.layout.v1.seededDefaults")
             remapJSONMetricOrder(defaults, key: "openusage.layout.v1.metricOrderByProvider")
             remapJSONPlacedWidgets(defaults, key: "openusage.layout.v1")
+        },
+        // v4 drops keys whose features are gone: PostHog's app-lifecycle keys (telemetry was removed;
+        // its other leftovers live outside this domain, see `TelemetryLeftoverCleanup`) and the dismiss
+        // flag of the removed upstream "A New OpenUsage Is Coming" notice.
+        SettingsMigration(version: 4) { defaults in
+            for key in ["PHGVersionKey", "PHGBuildKeyV2", "openusage.notices.newVersionDismissed"] {
+                defaults.removeObject(forKey: key)
+            }
         }
     ]
 

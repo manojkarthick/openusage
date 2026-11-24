@@ -362,6 +362,27 @@ final class SettingsMigratorTests: XCTestCase {
         XCTAssertEqual(pinsAfterFirst, ["antigravity.geminiPro", "copilot.premium", "ghost.metric"])
     }
 
+    // MARK: - v4: removed-feature keys
+
+    /// PostHog's lifecycle keys and the removed new-version notice's dismiss flag go; other settings stay.
+    func testV4DropsRemovedFeatureKeys() {
+        let (defaults, domain) = makeDefaults("V4RemovedKeys")
+        defer { defaults.removePersistentDomain(forName: domain) }
+        defaults.set(3, forKey: SettingsMigrator.schemaVersionKey)
+        defaults.set("0.7.18", forKey: "PHGVersionKey")
+        defaults.set("123", forKey: "PHGBuildKeyV2")
+        defaults.set(true, forKey: "openusage.notices.newVersionDismissed")
+        defaults.set(true, forKey: "openusage.onboarding.customizeHintPending")
+
+        let result = SettingsMigrator.migrate(defaults: defaults, domainName: domain)
+
+        XCTAssertEqual(result, 4)
+        XCTAssertNil(defaults.object(forKey: "PHGVersionKey"))
+        XCTAssertNil(defaults.object(forKey: "PHGBuildKeyV2"))
+        XCTAssertNil(defaults.object(forKey: "openusage.notices.newVersionDismissed"))
+        XCTAssertTrue(defaults.bool(forKey: "openusage.onboarding.customizeHintPending"))
+    }
+
     // MARK: - Schema integrity
 
     /// Guards against editing the migration list without bumping `current` (or vice versa): every
