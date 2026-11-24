@@ -1,16 +1,16 @@
 ---
 name: release-swift
-description: Cut a release of OpenUsage (Swift menu-bar app): pick a version, generate a categorized changelog, tag from `main`, and publish the GitHub Release with notes. Use to ship an Early Access beta or a stable release.
+description: Cut a release of this OpenUsage fork (Swift menu-bar app): pick a version, generate a categorized changelog, tag from `v0.7`, publish the GitHub Release with notes, and bump the Homebrew cask. Use to ship a beta or a stable release.
 ---
 
 # Release Swift
 
-Pushing a `v*` tag on `main` runs `.github/workflows/release.yml`, which builds, signs, notarizes, attaches `OpenUsage-<version>.dmg` to the GitHub Release, and updates the Sparkle `appcast.xml` on `gh-pages`. CI creates the release with an EMPTY body, so this skill generates the changelog, records it in `CHANGELOG.md`, and publishes the notes onto the release.
+This fork releases from the `v0.7` branch of `manojkarthick/openusage`. Pushing a `v*` tag runs `.github/workflows/release.yml`, which runs `swift test`, builds an arm64 ad-hoc signed `OpenUsage-<version>.dmg` with `script/release.sh` (no notarization, no Sparkle feed, no iCloud), and attaches it to the GitHub Release. CI fills the body with GitHub's auto-generated notes, so this skill generates the categorized changelog, records it in `CHANGELOG.md`, replaces the release notes with it, and bumps the Homebrew cask, which is how users update.
 
 ## Channels
 
-- **Beta (Early Access):** suffixed tag like `v0.7.1-beta.1`. Marked a GitHub pre-release and added to Sparkle's `beta` channel. Only users with Early Access enabled get it; GitHub "Latest" is untouched.
-- **Stable:** plain tag like `v0.7.1`. Marked non-prerelease, becomes GitHub "Latest", and ships to everyone.
+- **Beta:** suffixed tag like `v0.7.19-beta.1`. Marked a GitHub pre-release; GitHub "Latest" and the Homebrew cask are untouched.
+- **Stable:** plain tag like `v0.7.19`. Marked non-prerelease, becomes GitHub "Latest", and goes out through the Homebrew cask.
 
 The tag IS the version: `v0.7.1-beta.1` becomes `CFBundleShortVersionString = 0.7.1-beta.1`, and `CFBundleVersion` is the git commit count. There are no version files to bump.
 
@@ -38,7 +38,7 @@ Collect commits since the **previous release in the same channel** and categoriz
 Author attribution (required on every entry):
 
 - With a PR number `(#123)`: `gh pr view 123 --json author -q '.author.login'`.
-- Without a PR number: `gh api /repos/robinebers/openusage/commits/{full_hash} -q '.author.login'`.
+- Without a PR number: `gh api /repos/manojkarthick/openusage/commits/{full_hash} -q '.author.login'`.
 - If the API returns null, fall back to the git author name.
 
 Output the changelog in a code block (template below) for review.
@@ -49,10 +49,10 @@ Wait for explicit approval of the changelog before changing any files. Accept ed
 
 ### 4. Record it in CHANGELOG.md
 
-Prepend the approved section right after the `# Changelog` header. Commit on `main`:
+Prepend the approved section right after the `# Changelog` header. Commit on `v0.7`:
 
 ```sh
-git switch main && git pull
+git switch v0.7 && git pull
 git add CHANGELOG.md && git commit -m "docs: changelog for v{version}"
 ```
 
@@ -60,13 +60,13 @@ git add CHANGELOG.md && git commit -m "docs: changelog for v{version}"
 
 ```sh
 git tag -a v{version} -m "v{version}"
-git push origin main
+git push origin v0.7
 git push origin v{version}
 ```
 
 ### 6. Publish the notes
 
-CI creates the release with an empty body, so attach the approved notes after it finishes:
+CI creates the release with GitHub's auto-generated notes; replace them with the approved notes after it finishes:
 
 ```sh
 gh run watch
@@ -81,24 +81,30 @@ Never leave a release blank.
 ```sh
 gh release view v{version} --json isDraft,isPrerelease,assets,body \
   --jq '{isDraft, isPrerelease, assets:[.assets[].name], bodyLen:(.body|length)}'
-git fetch origin gh-pages && git show origin/gh-pages:appcast.xml | grep -F "OpenUsage-{version}.dmg"
-curl -s "https://robinebers.github.io/openusage/appcast.xml" | grep -F "OpenUsage-{version}.dmg"
 ```
 
-The second check matters: publishing is two hops — Release (or pricing-supplement) pushes `appcast.xml` to the **`gh-pages` branch**, then **`.github/workflows/deploy-pages.yml` on `main`** deploys that branch to the live site (Pages source is "GitHub Actions", not legacy branch deploy). Auto deploy runs on `workflow_run` after Release completes; GitHub sometimes returns **"Deployment failed, try again later"** even though `gh-pages` is already correct. If the branch has the version but the live URL does not after ~10 minutes, check `gh run list --workflow=deploy-pages.yml` and re-run **`gh workflow run deploy-pages.yml --ref main`** (must use `main` — the workflow file is not on `gh-pages`). Sparkle clients only see the live URL.
-
-Require `isDraft=false`, `isPrerelease=true` for beta or `false` for stable, an `OpenUsage-<version>.dmg` asset, `bodyLen>0`, and the version present in the appcast. If a draft was left behind, migrate its notes/assets onto the published release, then delete it — but only once a separate PUBLISHED release for the tag already exists:
+Require `isDraft=false`, `isPrerelease=true` for beta or `false` for stable, an `OpenUsage-<version>.dmg` asset, and `bodyLen>0`. If a draft was left behind, migrate its notes/assets onto the published release, then delete it — but only once a separate PUBLISHED release for the tag already exists:
 
 ```sh
 tag="v{version}"
 if [ "$(gh release view "$tag" --json isDraft --jq '.isDraft')" = "false" ]; then
-  gh api repos/robinebers/openusage/releases --paginate \
+  gh api repos/manojkarthick/openusage/releases --paginate \
     --jq '.[] | select(.draft and .tag_name=="'"$tag"'") | .id' \
-    | xargs -I{} gh api -X DELETE repos/robinebers/openusage/releases/{}
+    | xargs -I{} gh api -X DELETE repos/manojkarthick/openusage/releases/{}
 else
   echo "No published release for $tag yet - publish it first; do NOT delete the draft."
 fi
 ```
+
+### 8. Bump the Homebrew cask (stable only)
+
+Update `version` and `sha256` in `Casks/openusage.rb` of `manojkarthick/homebrew-tap`. Get the checksum from the published asset:
+
+```sh
+gh release download v{version} -R manojkarthick/openusage -p "OpenUsage-{version}.dmg" -O - | shasum -a 256
+```
+
+Ask the owner before pushing to the tap.
 
 ## Changelog template
 
@@ -108,10 +114,10 @@ Only include category sections that have entries.
 ## v{version}
 
 ### New Features
-- {message} ([#{pr}](https://github.com/robinebers/openusage/pull/{pr})) by @{author}
+- {message} ([#{pr}](https://github.com/manojkarthick/openusage/pull/{pr})) by @{author}
 
 ### Bug Fixes
-- {message} ([#{pr}](https://github.com/robinebers/openusage/pull/{pr})) by @{author}
+- {message} ([#{pr}](https://github.com/manojkarthick/openusage/pull/{pr})) by @{author}
 
 ### Refactor
 - {message} by @{author}
@@ -122,9 +128,9 @@ Only include category sections that have entries.
 ---
 
 ### Changelog
-**Full Changelog**: [{prev_tag}...v{version}](https://github.com/robinebers/openusage/compare/{prev_tag}...v{version})
+**Full Changelog**: [{prev_tag}...v{version}](https://github.com/manojkarthick/openusage/compare/{prev_tag}...v{version})
 
-- [{short_hash}](https://github.com/robinebers/openusage/commit/{full_hash}) {commit message} by @{author}
+- [{short_hash}](https://github.com/manojkarthick/openusage/commit/{full_hash}) {commit message} by @{author}
 ~~~
 
 `{prev_tag}` is the previous release **in the same channel**: last stable for a stable cut, last beta (or last stable for the first beta in a lane) for a beta cut.
@@ -136,6 +142,5 @@ Only include category sections that have entries.
 - Never push or tag automatically — ask the owner first.
 - Always publish notes to the GitHub Release — never blank.
 - The version is the tag; never edit version files.
-- The appcast is append-only: older installs and the other channel's latest build must keep working, so the workflow aborts rather than shrink it.
 
-Release secrets and one-time setup live in the README under [Release setup](../../../README.md#release-setup-one-time).
+No release secrets are needed. The README's [Releasing](../../../README.md#releasing) section has the short version of this flow.

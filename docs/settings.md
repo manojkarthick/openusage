@@ -76,8 +76,9 @@ Not touched: provider logins and API keys, and cached usage data. Turning iCloud
 
 ## Updates
 
-The Updates section appears in official packaged builds that include the signed update feed. Local
-developer builds do not show it.
+The Updates section appears only in builds that include a signed update feed. This fork's release
+builds don't ship one (see [Updates](updates.md)), so they don't show it, and neither do local developer
+builds.
 
 | Setting | Options | What it does |
 |---|---|---|
@@ -85,7 +86,7 @@ developer builds do not show it.
 | Beta Updates | On / Off | Adds pre-release builds to the updates you can receive. Stable releases remain available either way. |
 | Check for Updates… | button | Starts a manual update check and opens Sparkle's update window. |
 
-See [Updates](updates.md) for the dashboard banner, channels, and signature verification.
+See [Updates](updates.md) for how fork builds are updated.
 
 ## Version
 

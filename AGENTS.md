@@ -8,17 +8,16 @@ This file documents the engineering conventions for the project. Read it before 
 
 AGENTS.md is the source of truth for agent instructions in this repository. CLAUDE.md files may only point to the nearest AGENTS.md file with `@AGENTS.md`; do not add guidance, duplicate instructions, or project rules to CLAUDE.md.
 
-> **Repository note:** This is the native Swift edition of OpenUsage. Active development happens on the `main` branch. (NOT the legacy Tauri version which now sits in the `tauri-legacy` branch)
+> **Repository note:** This is the native Swift edition of OpenUsage. In this fork, active development happens on the `v0.7` branch; `main` mirrors upstream. (NOT the legacy Tauri version which now sits in the `tauri-legacy` branch)
 
 ## Releases
 
-`main` is the active development line; it ships via `.github/workflows/release.yml` (Sparkle appcast on `gh-pages`). Cut releases with the release-swift skill.
+In this fork, `v0.7` is the active development line. Pushing a `v*` tag runs `.github/workflows/release.yml`, which builds an ad-hoc signed arm64 DMG and attaches it to a GitHub Release. There's no Sparkle feed; users update through the Homebrew cask in `manojkarthick/homebrew-tap`. Cut releases with the release-swift skill.
 
 ### Guardrails (do not break)
 - Versions are `0.7.x` and up. Never reuse a `0.6.x` number — those are the original edition's released tags, now frozen on the `tauri-legacy` branch (final release `v0.6.28`).
 - **Never increase the version number on your own initiative — always ask for explicit approval first.** The version is a deliberate owner decision: propose the number and wait for explicit sign-off before tagging or cutting a release.
-- Beta releases use `-beta.N` tags and stay GitHub pre-releases on Sparkle's beta channel. Stable releases use plain tags and become GitHub "Latest".
-- Stable releases must carry forward the legacy `latest.json` so any remaining `0.6.x` installs can still update to `v0.6.28`. `release.yml` handles this; verify it with the release-swift skill.
+- Beta releases use `-beta.N` tags and stay GitHub pre-releases. Stable releases use plain tags and become GitHub "Latest".
 - Never leave a release in Draft, and never ship blank notes: the release-swift skill generates the changelog and verifies the published release after every cut.
 
 ## Architecture

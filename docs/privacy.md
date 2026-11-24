@@ -24,7 +24,7 @@ Desktop's rotating refresh token and never modifies Desktop's config, cookies, o
 - **Model price lists** — public [model price lists](pricing.md) about once an hour (from
   `raw.githubusercontent.com`, `models.dev`, and this project's GitHub Pages). These are plain downloads
   of public data and carry no usage, log, or account information.
-- **Update checks** — official builds check for new versions. See [Updates](updates.md).
+- **Update checks** — none. This fork's builds don't check for new versions; see [Updates](updates.md).
 - **iCloud Sync** — only if you turn it on (see below).
 
 The spend tiles are computed from local CLI logs entirely on your Mac; no log data ever leaves it.
@@ -38,6 +38,18 @@ but not raw JSONL lines or conversation text. They are private to your macOS acc
 to a provider or iCloud. Old source-file records are dropped as the scan window advances, and
 identity caches that have not been used for 35 days are removed. OpenUsage's pricing engine runs after
 the cache is read, so its computed aggregates and totals are not persisted in this cache.
+
+## Data left by older builds
+
+Builds from before telemetry was removed stored an anonymous install ID, queued analytics events, and
+crash reports on your Mac. OpenUsage deletes them at launch:
+
+- the `<bundle id>.telemetry` preferences,
+- `~/Library/Application Support/<bundle id>/phc_*/` (the analytics library's storage),
+- `~/Library/Caches/com.plausiblelabs.crashreporter.data/<bundle id>/` (crash reports),
+- the analytics library's version keys in the app's own preferences.
+
+`<bundle id>` is `com.robinebers.openusage`.
 
 ## iCloud Sync
 
