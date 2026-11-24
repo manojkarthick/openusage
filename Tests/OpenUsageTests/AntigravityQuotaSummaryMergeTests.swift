@@ -20,15 +20,6 @@ final class AntigravityQuotaSummaryMergeTests: XCTestCase {
         XCTAssertNil(AntigravityUsageMapper.parseQuotaSummaries([Data("{}".utf8)]))
     }
 
-    func testMergedSummariesTakeArgonFromTheFirstBodyThatHasIt() {
-        let argon = { (fraction: Double) in
-            #"{"groups":[{"displayName":"Gemini 4 Argon","buckets":[{"bucketId":"gemini-argon-wtu-weekly","window":"weekly","remainingFraction":\#(fraction)}]}]}"#
-        }
-        let lines = AntigravityUsageMapper.parseQuotaSummaries([Data(argon(0.6).utf8), Data(argon(0.1).utf8)])
-        XCTAssertEqual(lines?.map(\.label), ["Argon Weekly"], "two hosts' Argon groups must not read as an ambiguous bucket")
-        XCTAssertEqual(used(lines?.first) ?? -1, 40, accuracy: 0.0001)
-    }
-
     func testIsCompleteSummaryNeedsAllFourUsableBuckets() {
         XCTAssertTrue(AntigravityUsageMapper.isCompleteSummary(Data(completeJSON.utf8)))
         let missingWeekly = #"{"groups":[{"buckets":[{"bucketId":"gemini-5h","remainingFraction":1},{"bucketId":"3p-5h","remainingFraction":1},{"bucketId":"3p-weekly","remainingFraction":1}]}]}"#
@@ -36,8 +27,5 @@ final class AntigravityQuotaSummaryMergeTests: XCTestCase {
         let noFraction = #"{"groups":[{"buckets":[{"bucketId":"gemini-5h","remainingFraction":1},{"bucketId":"gemini-weekly"},{"bucketId":"3p-5h","remainingFraction":1},{"bucketId":"3p-weekly","remainingFraction":1}]}]}"#
         XCTAssertFalse(AntigravityUsageMapper.isCompleteSummary(Data(noFraction.utf8)))
         XCTAssertFalse(AntigravityUsageMapper.isCompleteSummary(Data("not json".utf8)))
-        let weeklyInArgon = #"{"groups":[{"buckets":[{"bucketId":"gemini-5h","remainingFraction":1},{"bucketId":"3p-5h","remainingFraction":1},{"bucketId":"3p-weekly","remainingFraction":1}]},{"displayName":"Gemini 4 Argon","buckets":[{"bucketId":"gemini-weekly","window":"weekly","remainingFraction":1}]}]}"#
-        XCTAssertFalse(AntigravityUsageMapper.isCompleteSummary(Data(weeklyInArgon.utf8)),
-                       "a shared bucket id inside the Argon group is not a usable shared-pool window")
     }
 }
