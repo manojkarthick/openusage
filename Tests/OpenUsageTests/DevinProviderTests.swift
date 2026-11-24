@@ -217,7 +217,7 @@ final class DevinProviderTests: XCTestCase {
 
         XCTAssertEqual(snapshot.lines.first?.label, "Error")
         XCTAssertEqual(errorText(snapshot.lines), DevinAuthError.notLoggedIn.localizedDescription)
-        // The final fallback must carry a real telemetry category (regression: it once used the
+        // The final fallback must carry a real error category (regression: it once used the
         // message-only factory, leaving errorCategory nil so failures bucketed as `other`).
         XCTAssertEqual(snapshot.errorCategory, .notLoggedIn)
     }

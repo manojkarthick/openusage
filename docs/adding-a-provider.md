@@ -45,8 +45,8 @@ of the number, not by the provider:
   use `.progress`, `.values`, `.badge`, or `.chart` for every descriptor-backed row.
 
 Set the snapshot's `plan` when the provider exposes a plan name. On failure, return
-`ProviderSnapshot.error(provider:error:)` with a typed provider error when possible, so telemetry can group
-the failure by a stable, non-private reason such as "not logged in" or "network". Use the message-only
+`ProviderSnapshot.error(provider:error:)` with a typed provider error when possible, so logs and the UI can
+report the failure by a stable, non-private reason such as "not logged in" or "network". Use the message-only
 factory only when there is no typed error, and never return stale or empty data silently.
 
 ## Steps
