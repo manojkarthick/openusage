@@ -93,8 +93,8 @@ struct AntigravityUsageClient: Sendable {
         await cloudCode(path: Self.loadCodeAssistPath, token: token, userAgent: Self.clientUserAgent, payload: Self.loadCodeAssistPayload)
     }
 
-    /// The hub client identity exposes the Gemini pools and separate Argon quota; other User-Agents
-    /// cause Google to drop `paidTier`, Gemini pools, or Argon.
+    /// The hub client identity exposes the Gemini pools; other User-Agents cause Google to drop
+    /// `paidTier` or the Gemini pools.
     static let clientUserAgent: String = {
         #if arch(arm64)
         let arch = "arm64"
