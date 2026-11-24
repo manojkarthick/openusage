@@ -1,5 +1,27 @@
 # Changelog
 
+## v0.7.18
+
+### New Features
+- Credit fork maintainer and link fork repo in About panel ([#1](https://github.com/manojkarthick/openusage/pull/1)) by @manojkarthick
+
+### Bug Fixes
+- Decrypt Cursor 3.27 sealed editor logins ([#2](https://github.com/manojkarthick/openusage/pull/2)) by @manojkarthick
+
+### Chores
+- Add v0.7 fork callout and update install/release instructions by @manojkarthick
+- Add guide for porting bug fixes from upstream by @manojkarthick
+
+---
+
+### Changelog
+**Full Changelog**: [v0.7.17...v0.7.18](https://github.com/manojkarthick/openusage/compare/v0.7.17...v0.7.18)
+
+- [f44c922](https://github.com/manojkarthick/openusage/commit/f44c92270b4ae34434865eb7465a7f54269bbec2) fix(cursor): decrypt Cursor 3.27 sealed editor logins by @manojkarthick
+- [ccd241e](https://github.com/manojkarthick/openusage/commit/ccd241eee7f8021489eb5e6d774410ff221d8e3e) feat(about): credit fork maintainer and link fork repo in About panel by @manojkarthick
+- [9497518](https://github.com/manojkarthick/openusage/commit/94975182b9e37180a6bd77aa864b3477e3f58df9) docs: add guide for porting bug fixes from upstream by @manojkarthick
+- [de05c9e](https://github.com/manojkarthick/openusage/commit/de05c9e4374ecc7f3fa2dad84f349ab9bc68481b) docs: add v0.7 fork callout and update install/release instructions by @manojkarthick
+
 ## v0.7.16
 
 > **A new OpenUsage is coming.** The next update removes spend and token tracking, with no transition period, and moves sign-in into the app. To keep these features, stay on this version. Details: [#1441](https://github.com/robinebers/openusage/issues/1441)
