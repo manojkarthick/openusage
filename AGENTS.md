@@ -12,13 +12,14 @@ AGENTS.md is the source of truth for agent instructions in this repository. CLAU
 
 ## Releases
 
-In this fork, `v0.7` is the active development line. Pushing a `v*` tag runs `.github/workflows/release.yml`, which builds an ad-hoc signed arm64 DMG and attaches it to a GitHub Release. There's no Sparkle feed; users update through the Homebrew cask in `manojkarthick/homebrew-tap`. Cut releases with the release-swift skill.
+In this fork, `v0.7` is the active development line. Releases are cut by running `.github/workflows/release.yml` (manual dispatch, `stable` or `beta`): it picks the next version, writes the changelog with git-cliff (`cliff.toml`) and commits it to `CHANGELOG.md`, tags, publishes the GitHub Release, builds and attaches an ad-hoc signed arm64 DMG, and bumps the Homebrew cask in `manojkarthick/homebrew-tap`. There's no Sparkle feed. See the release-swift skill.
 
 ### Guardrails (do not break)
-- Versions are `0.7.x` and up. Never reuse a `0.6.x` number — those are the original edition's released tags, now frozen on the `tauri-legacy` branch (final release `v0.6.28`).
-- **Never increase the version number on your own initiative — always ask for explicit approval first.** The version is a deliberate owner decision: propose the number and wait for explicit sign-off before tagging or cutting a release.
-- Beta releases use `-beta.N` tags and stay GitHub pre-releases. Stable releases use plain tags and become GitHub "Latest".
-- Never leave a release in Draft, and never ship blank notes: the release-swift skill generates the changelog and verifies the published release after every cut.
+- Versions stay `0.7.x` for good — upstream's `0.8` is a fundamental redesign, and the fork's numbering marks it as branched from the old line. Never reuse a `0.6.x` number (the original edition's tags, frozen on `tauri-legacy`) and never move to `0.8`, whose upstream tags already exist on this fork's remote.
+- **Never increase the version number on your own initiative — always ask for explicit approval first.** Never run the Release workflow or push a tag without explicit sign-off.
+- PRs into `v0.7` are squash-merged with the PR title, which must be a Conventional Commit; git-cliff groups the changelog by its type.
+- Beta releases use `-beta.N` tags and stay GitHub pre-releases. Stable releases use plain tags and become GitHub "Latest". Both update the Homebrew cask.
+- Never leave a release in Draft, and never ship blank notes: the Release workflow verifies the published release (not a draft, DMG attached, notes present) after every cut.
 
 ## Architecture
 
