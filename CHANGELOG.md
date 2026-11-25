@@ -1,5 +1,33 @@
 # Changelog
 
+## v0.7.19
+
+### New Features
+- Remove PostHog telemetry ([#5](https://github.com/manojkarthick/openusage/pull/5)) by @manojkarthick
+
+### Bug Fixes
+- Delete PostHog data left by pre-removal builds ([#6](https://github.com/manojkarthick/openusage/pull/6)) by @manojkarthick
+- Add gemini-4-neon rates and grok-4.7 router slug aliases ([#9](https://github.com/manojkarthick/openusage/pull/9)) by @manojkarthick
+- Cursor: accept empty usage-event days and distinguish unavailable states ([#9](https://github.com/manojkarthick/openusage/pull/9)) by @manojkarthick
+- Add gemini-4-carbon and gemini-4-hydrogen rates ([#10](https://github.com/manojkarthick/openusage/pull/10)) by @manojkarthick
+
+### Chores
+- Repoint or remove UI and docs that point at upstream ([#6](https://github.com/manojkarthick/openusage/pull/6)) by @manojkarthick
+- Antigravity: drop Argon Weekly now that Argon uses the shared Gemini pool ([#8](https://github.com/manojkarthick/openusage/pull/8)) by @manojkarthick
+
+---
+
+### Changelog
+**Full Changelog**: [v0.7.18...v0.7.19](https://github.com/manojkarthick/openusage/compare/v0.7.18...v0.7.19)
+
+- [043b9b5](https://github.com/manojkarthick/openusage/commit/043b9b5b15ebe9bca7205eccb4bd0ce2a3f874b1) feat: remove PostHog telemetry by @manojkarthick
+- [7dec327](https://github.com/manojkarthick/openusage/commit/7dec327a140b2004e548fa6ab7c13a4be6d3802a) fix: delete PostHog data left by pre-removal builds by @manojkarthick
+- [b6b8085](https://github.com/manojkarthick/openusage/commit/b6b808500d93e59d8aa1bf579fd45e91fe9995f0) chore: repoint or remove UI and docs that point at upstream by @manojkarthick
+- [d0a79f1](https://github.com/manojkarthick/openusage/commit/d0a79f18dbc6fb28fe749f477c635b651dfc065b) chore(antigravity): drop Argon Weekly now that Argon uses the shared Gemini pool by @manojkarthick
+- [c257500](https://github.com/manojkarthick/openusage/commit/c2575009c30bf5d77c3282d91cbde33eee41be0a) fix(pricing): add gemini-4-neon rates and grok-4.7 router slug aliases by @manojkarthick
+- [b3a2212](https://github.com/manojkarthick/openusage/commit/b3a221205ec496579558de5e4d8cf4ee8adcc7c5) fix(cursor): accept empty usage-event days and distinguish unavailable states by @manojkarthick
+- [eefc249](https://github.com/manojkarthick/openusage/commit/eefc2497f89beb0f577f78a888378fb2518759e1) fix(pricing): add gemini-4-carbon and gemini-4-hydrogen rates by @manojkarthick
+
 ## v0.7.18
 
 ### New Features
