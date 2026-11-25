@@ -58,13 +58,15 @@ final class CursorOptionalEndpointTests: XCTestCase {
             var name: String
             var response: HTTPResponse
             var expectedLog: String?  // nil → the invalid-usage warning must NOT appear
+            var expectedReason: MetricUnavailableReason
         }
         let invalidUsageLog = "Grok Bot usage response contained invalid usage metadata"
         let cases = [
             GrokBotCase(
                 name: "HTTP failure",
                 response: HTTPResponse(statusCode: 503, headers: [:], body: Data()),
-                expectedLog: "optional Grok Bot usage request returned HTTP 503"
+                expectedLog: "optional Grok Bot usage request returned HTTP 503",
+                expectedReason: .loadFailed
             ),
             GrokBotCase(
                 name: "invalid usage metadata",
@@ -72,7 +74,8 @@ final class CursorOptionalEndpointTests: XCTestCase {
                     statusCode: 200, headers: [:],
                     body: Data(#"{"usagePercent":true,"hasNonZeroIncludedLimit":true}"#.utf8)
                 ),
-                expectedLog: "optional " + invalidUsageLog
+                expectedLog: "optional " + invalidUsageLog,
+                expectedReason: .loadFailed
             ),
             GrokBotCase(
                 name: "ineligible account",
@@ -80,7 +83,8 @@ final class CursorOptionalEndpointTests: XCTestCase {
                     statusCode: 200, headers: [:],
                     body: Data(#"{"includedLimitZero":true}"#.utf8)
                 ),
-                expectedLog: nil
+                expectedLog: nil,
+                expectedReason: .notApplicable
             ),
             GrokBotCase(
                 name: "zero usage without included allowance",
@@ -88,7 +92,17 @@ final class CursorOptionalEndpointTests: XCTestCase {
                     statusCode: 200, headers: [:],
                     body: Data(#"{"usagePercent":0,"hasNonZeroIncludedLimit":false}"#.utf8)
                 ),
-                expectedLog: nil
+                expectedLog: nil,
+                expectedReason: .notApplicable
+            ),
+            GrokBotCase(
+                name: "pooled enterprise allowance",
+                response: HTTPResponse(
+                    statusCode: 200, headers: [:],
+                    body: Data(#"{"usesPooledEnterpriseAllowance":true}"#.utf8)
+                ),
+                expectedLog: nil,
+                expectedReason: .notApplicable
             )
         ]
 
@@ -112,6 +126,7 @@ final class CursorOptionalEndpointTests: XCTestCase {
             XCTAssertNil(snapshot.errorCategory, grokBotCase.name)
             XCTAssertEqual(progress(snapshot.lines, "Total usage")?.used, 20, grokBotCase.name)
             XCTAssertNil(snapshot.lines.first { $0.label == "Grok Bot usage" }, grokBotCase.name)
+            XCTAssertEqual(snapshot.unavailableMetrics["Grok Bot usage"], grokBotCase.expectedReason, grokBotCase.name)
             if let expectedLog = grokBotCase.expectedLog {
                 XCTAssertTrue(logs.contains(expectedLog), "\(grokBotCase.name): \(logs)")
             } else {

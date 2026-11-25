@@ -591,9 +591,11 @@ final class WidgetDataStore {
             result = data
         } else {
             // No real metric line backs this placed tile, so the sample's numbers are placeholders.
-            // Flag it as no-data; the tile renders "No data" instead of inventing usage.
+            // Flag it as no-data; the tile renders "No data" (or the provider's unavailable reason)
+            // instead of inventing usage.
             result = descriptor.sample
             result.hasData = false
+            result.unavailableReason = snapshots[descriptor.providerID]?.unavailableMetrics[descriptor.metricLabel]
         }
 
         // Single global choke point: dashboard/share rows and menu-bar values all funnel through here,

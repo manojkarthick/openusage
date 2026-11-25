@@ -22,6 +22,54 @@ final class WidgetNoDataTests: XCTestCase {
         XCTAssertNotEqual(real.valueText, WidgetData.noDataHeadline)
     }
 
+    func testUnavailableReasonsDistinguishNotOnPlanAndLoadFailure() async {
+        let provider = Provider(id: "test", displayName: "Test", icon: .providerMark("cursor"))
+        let noDataRow = boundedPercent(provider, id: "test.empty", metric: "Empty", sampleUsed: 50)
+        let notOnPlanRow = boundedPercent(provider, id: "test.plan", metric: "PlanOnly", sampleUsed: 50)
+        let failedRow = WidgetDescriptor(
+            id: "test.failed",
+            providerID: provider.id,
+            metricLabel: "History",
+            sample: WidgetData(title: "History", icon: provider.icon, kind: .dollars, used: 10, limit: nil)
+        )
+        let runtime = TestProviderRuntime(
+            provider: provider,
+            descriptors: [noDataRow, notOnPlanRow, failedRow],
+            snapshot: ProviderSnapshot(
+                providerID: provider.id,
+                displayName: provider.displayName,
+                lines: [],
+                unavailableMetrics: [
+                    "PlanOnly": .notApplicable,
+                    "History": .loadFailed
+                ]
+            )
+        )
+        let defaults = makeUserDefaults("unavailable-reasons")
+        let store = WidgetDataStore(
+            registry: WidgetRegistry(providers: [provider], descriptors: [noDataRow, notOnPlanRow, failedRow]),
+            providers: [runtime],
+            cache: ProviderSnapshotCache(userDefaults: defaults, storageKey: "snapshots", ttl: 600, now: { Date() }),
+            defaults: defaults
+        )
+        await store.refreshAll()
+
+        let plain = store.data(for: noDataRow)
+        XCTAssertEqual(plain.boundedTrailingText(), "No data")
+        XCTAssertFalse(plain.isLoadFailed)
+        XCTAssertEqual(plain.menuBarValue, "—")
+
+        let notOnPlan = store.data(for: notOnPlanRow)
+        XCTAssertEqual(notOnPlan.boundedTrailingText(), "Not on plan")
+        XCTAssertFalse(notOnPlan.isLoadFailed)
+        XCTAssertEqual(notOnPlan.menuBarValue, "—")
+
+        let failed = store.data(for: failedRow)
+        XCTAssertEqual(failed.unboundedDetail, "Couldn't load")
+        XCTAssertTrue(failed.isLoadFailed)
+        XCTAssertEqual(failed.menuBarValue, "—")
+    }
+
     // Menu-bar ordering / no-data-skip / fallback are exercised on the real tray path
     // (MenuBarContentBuilder + LayoutStore.pinnedGroups) in MenuBarContentTests and MenuBarPinTests.
 
