@@ -1,7 +1,7 @@
 name: Build DMG
 
-# Builds the DMG for an existing tag, attaches it to that tag's GitHub Release, and verifies the
-# published release. Called by release.yml.
+# Builds the DMG for an existing tag, attaches it to that tag's GitHub Release, publishes the signed
+# Sparkle appcast entry to gh-pages, and verifies the published release. Called by release.yml.
 on:
   workflow_call:
     inputs:
@@ -14,6 +14,11 @@ on:
       prerelease:
         required: true
         type: boolean
+    secrets:
+      SPARKLE_PRIVATE_KEY:
+        required: true
+      SPARKLE_PUBLIC_KEY:
+        required: true
 
 permissions:
   contents: read
@@ -27,15 +32,65 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       TAG: ${{ inputs.tag }}
       VERSION: ${{ inputs.version }}
+      PRERELEASE: ${{ inputs.prerelease }}
     steps:
       - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.tag }}
           # release.sh uses the commit count as CFBundleVersion.
           fetch-depth: 0
+          persist-credentials: true
 
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode.app
+
+      - name: Validate Sparkle secrets and resolve build number
+        id: meta
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+          SPARKLE_PUBLIC_KEY: ${{ secrets.SPARKLE_PUBLIC_KEY }}
+        run: |
+          [ -n "$SPARKLE_PRIVATE_KEY" ] || { echo "::error::SPARKLE_PRIVATE_KEY secret is empty"; exit 1; }
+          [ -n "$SPARKLE_PUBLIC_KEY" ] || { echo "::error::SPARKLE_PUBLIC_KEY secret is empty"; exit 1; }
+          BUILD="$(git rev-list --count HEAD)"
+          echo "build=$BUILD" >> "$GITHUB_OUTPUT"
+          echo "Building $VERSION (build $BUILD, prerelease=$PRERELEASE)"
+
+      - name: Carry forward the existing appcast
+        run: |
+          mkdir -p feed
+          # Distinguish "no gh-pages yet" (exit 2) from transient network/read errors so a blip
+          # can't wipe the live feed's history.
+          set +e
+          git ls-remote --exit-code --heads origin gh-pages >/dev/null 2>&1
+          rc=$?
+          set -e
+          if [ "$rc" -eq 0 ]; then
+            git fetch origin gh-pages
+            git show origin/gh-pages:appcast.xml > feed/appcast.xml \
+              || { echo "::error::gh-pages exists but appcast.xml is unreadable"; exit 1; }
+            echo "Loaded existing appcast from gh-pages."
+          elif [ "$rc" -eq 2 ]; then
+            echo "No gh-pages branch yet — starting a fresh feed."
+          else
+            echo "::error::Could not reach origin to check for gh-pages (rc=$rc)"
+            exit 1
+          fi
+
+      - name: Check build number against existing appcast
+        env:
+          BUILD: ${{ steps.meta.outputs.build }}
+        run: |
+          [ -f feed/appcast.xml ] || exit 0
+          python3 script/check_appcast.py preflight feed/appcast.xml "$TAG" "$BUILD"
+
+      - name: Extract release notes for appcast
+        run: |
+          gh release view "$TAG" --json body --jq '.body' > "feed/OpenUsage-$VERSION.md"
+          if ! grep -q '[^[:space:]]' "feed/OpenUsage-$VERSION.md"; then
+            echo "::error::Release notes for $TAG are empty"
+            exit 1
+          fi
 
       - name: Run tests
         run: swift test
@@ -43,14 +98,64 @@ jobs:
       - name: Build DMG
         env:
           OPENUSAGE_VERSION: ${{ inputs.version }}
+          OPENUSAGE_BUILD: ${{ steps.meta.outputs.build }}
+          SPARKLE_PUBLIC_KEY: ${{ secrets.SPARKLE_PUBLIC_KEY }}
         run: ./script/release.sh
 
       - name: Upload DMG to the release
         run: gh release upload "$TAG" "dist/OpenUsage-$VERSION.dmg" --clobber
 
-      - name: Verify the published release
+      - name: Generate appcast with Sparkle
         env:
-          PRERELEASE: ${{ inputs.prerelease }}
+          DMG: OpenUsage-${{ inputs.version }}.dmg
+          BUILD: ${{ steps.meta.outputs.build }}
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+          DOWNLOAD_PREFIX: https://github.com/${{ github.repository }}/releases/download/${{ inputs.tag }}/
+        run: |
+          GA="$(find .build/artifacts -type f -name generate_appcast 2>/dev/null | head -n1)"
+          [ -x "$GA" ] || { echo "::error::generate_appcast not found under .build/artifacts"; exit 1; }
+
+          before_arg=()
+          if [ -f feed/appcast.xml ]; then
+            cp feed/appcast.xml "$RUNNER_TEMP/appcast.before.xml"
+            before_arg=(--before "$RUNNER_TEMP/appcast.before.xml")
+          fi
+
+          cp "dist/$DMG" "feed/$DMG"
+
+          channel_arg=()
+          [ "$PRERELEASE" = "true" ] && channel_arg=(--channel beta)
+
+          printf '%s' "$SPARKLE_PRIVATE_KEY" | "$GA" \
+            --ed-key-file - \
+            --download-url-prefix "$DOWNLOAD_PREFIX" \
+            --maximum-versions 0 \
+            --embed-release-notes \
+            "${channel_arg[@]}" \
+            feed
+
+          grep -Eq "$DMG\"[^>]*sparkle:edSignature" feed/appcast.xml \
+            || { echo "::error::New item for $DMG is missing or unsigned (SUPublicEDKey/private-key mismatch?)"; exit 1; }
+          xmllint --xpath "string(//item[enclosure[contains(@url, '/$DMG')]]/description)" feed/appcast.xml \
+            | grep '[^[:space:]]' >/dev/null \
+            || { echo "::error::New item for $DMG has no release notes in <description>"; exit 1; }
+          python3 script/check_appcast.py verify feed/appcast.xml "$TAG" --build "$BUILD" "${before_arg[@]}"
+
+      - name: Assemble Pages directory
+        run: |
+          mkdir -p public
+          cp feed/appcast.xml public/appcast.xml
+
+      - name: Publish appcast to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: ./public
+          # Keep .nojekyll and pricing_supplement.json on gh-pages untouched.
+          keep_files: true
+
+      - name: Verify the published release
         run: |
           gh release view "$TAG" --json isDraft,isPrerelease,assets,body --jq '
             if .isDraft then "release is a draft"

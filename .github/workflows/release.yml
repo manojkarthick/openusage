@@ -2,8 +2,8 @@ name: Release
 
 # Manual release from the tip of v0.7. Picks the next 0.7.x version, writes the changelog with
 # git-cliff (cliff.toml) and commits it to v0.7, tags and creates the GitHub Release, builds and
-# attaches the DMG, and bumps the Homebrew cask. The fork stays on 0.7.x for good: upstream's 0.8
-# is a redesign, so the minor version never moves.
+# attaches the DMG, updates the Sparkle appcast on gh-pages, and bumps the Homebrew cask. The fork
+# stays on 0.7.x for good: upstream's 0.8 is a redesign, so the minor version never moves.
 on:
   workflow_dispatch:
     inputs:
@@ -108,6 +108,9 @@ jobs:
       tag: ${{ needs.prepare.outputs.tag }}
       version: ${{ needs.prepare.outputs.version }}
       prerelease: ${{ needs.prepare.outputs.prerelease == 'true' }}
+    secrets:
+      SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+      SPARKLE_PUBLIC_KEY: ${{ secrets.SPARKLE_PUBLIC_KEY }}
 
   homebrew:
     needs: [prepare, build]

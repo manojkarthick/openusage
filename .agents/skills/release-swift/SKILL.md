@@ -9,8 +9,9 @@ This fork releases from the `v0.7` branch of `manojkarthick/openusage` through o
 
 | File | Role |
 |---|---|
-| `.github/workflows/release.yml` | Dispatch (`channel`: `stable` or `beta`): version → changelog → tag + GitHub Release → DMG → Homebrew cask |
-| `.github/workflows/build-dmg.yml` | Called by it: `swift test`, `script/release.sh`, upload DMG, verify the release |
+| `.github/workflows/release.yml` | Dispatch (`channel`: `stable` or `beta`): version → changelog → tag + GitHub Release → DMG + Sparkle appcast → Homebrew cask |
+| `.github/workflows/build-dmg.yml` | Called by it: `swift test`, `script/release.sh`, upload DMG, update `appcast.xml` on `gh-pages`, verify the release |
+| `script/check_appcast.py` | Preflights and verifies the generated Sparkle `appcast.xml` item (build monotonicity, channel, enclosure) |
 | `cliff.toml` | git-cliff changelog config (sections, PR links, `by @author`, full commit list) |
 
 The tag IS the version: `v0.7.20-beta.1` becomes `CFBundleShortVersionString = 0.7.20-beta.1`, and `CFBundleVersion` is the git commit count. There are no version files to bump.
@@ -38,11 +39,11 @@ Betas update only the `openusage@beta` cask. Stables update both `openusage` and
    gh run watch -R manojkarthick/openusage $(gh run list -R manojkarthick/openusage -w Release -L 1 --json databaseId -q '.[0].databaseId')
    ```
 
-The run commits `docs: changelog for v<version>` to `v0.7`, tags it, publishes the GitHub Release with the notes, builds and attaches `OpenUsage-<version>.dmg`, verifies the release (not a draft, correct pre-release flag, DMG attached, notes non-empty), and pushes the `version`/`sha256` bump to `Casks/openusage@beta.rb` (and, for stable, `Casks/openusage.rb`) in `manojkarthick/homebrew-tap`.
+The run commits `docs: changelog for v<version>` to `v0.7`, tags it, publishes the GitHub Release with the notes, builds and attaches `OpenUsage-<version>.dmg`, signs the DMG with Sparkle's EdDSA key and updates `appcast.xml` on `gh-pages` (`https://manojkarthick.github.io/openusage/appcast.xml`, keeping stable on the default channel and beta on `<sparkle:channel>beta</sparkle:channel>`), verifies the release (not a draft, correct pre-release flag, DMG attached, notes non-empty), and pushes the `version`/`sha256` bump to `Casks/openusage@beta.rb` (and, for stable, `Casks/openusage.rb`) in `manojkarthick/homebrew-tap`.
 
 ## When a run fails
 
 - **`prepare` failed before pushing:** nothing was published; fix and dispatch again. "No commits since …" means there's nothing to release.
-- **`build` or verify failed:** the tag and release already exist. Re-run the failed jobs (`gh run rerun <id> --failed`); the upload uses `--clobber`, so it's safe. Don't dispatch again — that would cut the next version.
+- **`build` or verify failed:** the tag and release already exist. Re-run the failed jobs (`gh run rerun <id> --failed`); the upload uses `--clobber` and `check_appcast.py` allows rerunning the same tag, so it's safe. Don't dispatch again — that would cut the next version. If `generate_appcast` reports an unsigned enclosure, verify the `SPARKLE_PRIVATE_KEY` and `SPARKLE_PUBLIC_KEY` secrets match.
 - **`homebrew` failed:** check the `HOMEBREW_TAP_TOKEN` secret (fine-grained PAT, Contents read/write on `manojkarthick/homebrew-tap`) and re-run the failed job.
 - Never leave a release in Draft or with blank notes.
