@@ -116,6 +116,9 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       TAG: ${{ needs.prepare.outputs.tag }}
       VERSION: ${{ needs.prepare.outputs.version }}
+      # Betas bump only openusage@beta. Stables bump both casks, so beta users never sit on an older
+      # beta after its stable ships.
+      CASKS: ${{ inputs.channel == 'stable' && 'openusage openusage@beta' || 'openusage@beta' }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -123,19 +126,21 @@ jobs:
           # Fine-grained PAT with Contents read/write on manojkarthick/homebrew-tap only.
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
 
-      - name: Bump the cask
+      - name: Bump the casks
         run: |
           SHA256="$(gh release download "$TAG" -R "$GITHUB_REPOSITORY" -p "OpenUsage-$VERSION.dmg" -O - | sha256sum | cut -d' ' -f1)"
-          sed -i -E \
-            -e "s/^  version \"[^\"]+\"/  version \"$VERSION\"/" \
-            -e "s/^  sha256 \"[^\"]+\"/  sha256 \"$SHA256\"/" \
-            Casks/openusage.rb
-          grep -q "version \"$VERSION\"" Casks/openusage.rb
-          grep -q "sha256 \"$SHA256\"" Casks/openusage.rb
+          for cask in $CASKS; do
+            sed -i -E \
+              -e "s/^  version \"[^\"]+\"/  version \"$VERSION\"/" \
+              -e "s/^  sha256 \"[^\"]+\"/  sha256 \"$SHA256\"/" \
+              "Casks/$cask.rb"
+            grep -q "version \"$VERSION\"" "Casks/$cask.rb"
+            grep -q "sha256 \"$SHA256\"" "Casks/$cask.rb"
+          done
 
       - name: Push to the tap
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -am "openusage $VERSION"
+          git commit -am "${CASKS// /, } $VERSION"
           git push

@@ -19,6 +19,8 @@ OpenUsage shows how much of your AI coding plans you've used: session and weekly
 brew install --cask manojkarthick/tap/openusage
 ```
 
+For beta releases, install `manojkarthick/tap/openusage@beta` instead. It gets every beta and every stable release. The two casks conflict, so uninstall one before installing the other.
+
 If you already have an older `OpenUsage.app` in `/Applications`, pass `--force` to replace it. The cask also clears the macOS quarantine attribute automatically and links the `openusage` CLI to `/opt/homebrew/bin/openusage`.
 
 **Direct download:** grab the latest `arm64` DMG from the [releases page](https://github.com/manojkarthick/openusage/releases/latest), drag `OpenUsage.app` to `/Applications`, and clear the quarantine flag since builds are ad-hoc signed:
@@ -98,7 +100,7 @@ Run the **Release** workflow ([.github/workflows/release.yml](.github/workflows/
 - writes the changelog with [git-cliff](https://git-cliff.org) ([cliff.toml](cliff.toml)) and commits it to `CHANGELOG.md`,
 - tags the release and publishes the GitHub Release (betas as pre-releases),
 - runs `swift test`, builds the `arm64` ad-hoc signed DMG via [script/release.sh](script/release.sh), and attaches it,
-- bumps the cask in `manojkarthick/homebrew-tap`.
+- bumps the casks in `manojkarthick/homebrew-tap`: stable bumps `openusage` and `openusage@beta`, beta bumps only `openusage@beta`.
 
 PRs into `v0.7` are squash-merged, so the PR title (a Conventional Commit such as `fix(cursor): …`) becomes the changelog entry. The only secret is `HOMEBREW_TAP_TOKEN`, a fine-grained PAT with Contents read/write on `manojkarthick/homebrew-tap`.
 
