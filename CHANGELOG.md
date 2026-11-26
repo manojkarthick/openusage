@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.7.20-beta.2
+
+### Chores
+- Publish betas to an openusage@beta cask ([#12](https://github.com/manojkarthick/openusage/pull/12)) by @manojkarthick
+- Enable Sparkle in-app updates via gh-pages appcast ([#13](https://github.com/manojkarthick/openusage/pull/13)) by @manojkarthick
+
+---
+
+### Changelog
+**Full Changelog**: [v0.7.20-beta.1...v0.7.20-beta.2](https://github.com/manojkarthick/openusage/compare/v0.7.20-beta.1...v0.7.20-beta.2)
+
+- [c9929da](https://github.com/manojkarthick/openusage/commit/c9929da4593bc5c903cc1f0a2bbf7cc7d60fb839) ci(release): publish betas to an openusage@beta cask ([#12](https://github.com/manojkarthick/openusage/pull/12)) by @manojkarthick
+- [1c54d24](https://github.com/manojkarthick/openusage/commit/1c54d24087dfc51437905efa3472e7643fc26fde) ci(release): enable Sparkle in-app updates via gh-pages appcast ([#13](https://github.com/manojkarthick/openusage/pull/13)) by @manojkarthick
+
 ## v0.7.20-beta.1
 
 ### Chores
