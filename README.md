@@ -92,15 +92,15 @@ SwiftPM package, SwiftUI content hosted in an AppKit-owned `NSStatusItem` + cust
 
 ## Releasing
 
-Pushing a `v*` tag from `v0.7` runs [.github/workflows/release.yml](.github/workflows/release.yml), which executes `swift test`, builds an `arm64` ad-hoc signed DMG via [script/release.sh](script/release.sh), and publishes it to GitHub Releases. No signing, notarization, or Sparkle secrets are required.
+Run the **Release** workflow ([.github/workflows/release.yml](.github/workflows/release.yml)) from the Actions tab or with `gh workflow run release.yml -f channel=stable` (or `beta`). It releases the tip of `v0.7`:
 
-To ship a new release and update the Homebrew cask:
+- picks the next version: `0.7.x` for stable, `0.7.x-beta.N` for beta. The fork stays on `0.7.x`.
+- writes the changelog with [git-cliff](https://git-cliff.org) ([cliff.toml](cliff.toml)) and commits it to `CHANGELOG.md`,
+- tags the release and publishes the GitHub Release (betas as pre-releases),
+- runs `swift test`, builds the `arm64` ad-hoc signed DMG via [script/release.sh](script/release.sh), and attaches it,
+- bumps the cask in `manojkarthick/homebrew-tap`.
 
-```sh
-git tag v0.7.x && git push origin v0.7.x
-```
-
-Then update the `version` and `sha256` in `manojkarthick/homebrew-tap` (`Casks/openusage.rb`).
+PRs into `v0.7` are squash-merged, so the PR title (a Conventional Commit such as `fix(cursor): …`) becomes the changelog entry. The only secret is `HOMEBREW_TAP_TOKEN`, a fine-grained PAT with Contents read/write on `manojkarthick/homebrew-tap`.
 
 ## License
 

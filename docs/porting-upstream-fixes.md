@@ -55,23 +55,14 @@ After adapting the code and unit tests:
 
 ## 4. Cut a release and update the Homebrew cask
 
-1. Push `v0.7` and tag the next patch version:
+1. Merge the port to `v0.7` (squash; the PR title must be a Conventional Commit such as `fix(antigravity): …`).
+2. Run the **Release** workflow and follow it:
    ```sh
-   git push origin v0.7
-   git tag v0.7.18
-   git push origin v0.7.18
-   ```
-2. Wait for the **Release** GitHub Actions workflow (`.github/workflows/release.yml`) to finish running `swift test`, building the `arm64` ad-hoc DMG, and publishing the GitHub Release:
-   ```sh
+   gh workflow run release.yml --repo manojkarthick/openusage -f channel=stable
    gh run watch --repo manojkarthick/openusage
    ```
-3. Grab the published DMG's SHA256:
-   ```sh
-   curl -fsSL https://api.github.com/repos/manojkarthick/openusage/releases/tags/v0.7.18 \
-     | jq -r '.assets[] | "\(.name) \(.digest)"'
-   ```
-4. Update `version` and `sha256` in `Casks/openusage.rb` in `manojkarthick/homebrew-tap`, commit, and push.
-5. Upgrade on any Mac:
+   It picks the next `0.7.x`, writes the changelog, tags, publishes the GitHub Release with the DMG, and bumps `Casks/openusage.rb` in `manojkarthick/homebrew-tap`.
+3. Upgrade on any Mac:
    ```sh
    brew update && brew upgrade --cask openusage
    ```
