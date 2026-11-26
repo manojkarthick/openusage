@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.7.20-beta.1
+
+### Chores
+- Cut releases from a manual workflow that writes the changelog and bumps the tap ([#11](https://github.com/manojkarthick/openusage/pull/11)) by @manojkarthick
+
+---
+
+### Changelog
+**Full Changelog**: [v0.7.19...v0.7.20-beta.1](https://github.com/manojkarthick/openusage/compare/v0.7.19...v0.7.20-beta.1)
+
+- [b46d0f4](https://github.com/manojkarthick/openusage/commit/b46d0f44fb6faaa092d0a820de5affc3890f0ecf) ci(release): cut releases from a manual workflow that writes the changelog and bumps the tap ([#11](https://github.com/manojkarthick/openusage/pull/11)) by @manojkarthick
+
 ## v0.7.19
 
 ### New Features
