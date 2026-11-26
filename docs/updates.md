@@ -7,7 +7,7 @@ Settings.
 
 ## Getting a new version
 
-- **Homebrew:** `brew upgrade --cask openusage`.
+- **Homebrew:** `brew upgrade --cask openusage` (or `openusage@beta` on the beta channel).
 - **Direct download:** get the latest DMG from the fork's
   [GitHub releases](https://github.com/manojkarthick/openusage/releases/latest) and replace the app in
   Applications. Builds are ad-hoc signed, so clear the quarantine flag as described in the

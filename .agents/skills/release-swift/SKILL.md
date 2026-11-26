@@ -22,7 +22,7 @@ Always `0.7.x` — the fork never moves to `0.8` (upstream's redesign, whose tag
 - **Stable:** next patch after the last stable tag (`v0.7.19` → `v0.7.20`). Notes span last stable → this one, rolling up the whole beta series. Marked GitHub "Latest".
 - **Beta:** `-beta.N` on that next patch (`v0.7.20-beta.1`, then `-beta.2`, …). Notes span the previous beta (or last stable for the first beta). Marked a pre-release.
 
-Both update the Homebrew cask.
+Betas update only the `openusage@beta` cask. Stables update both `openusage` and `openusage@beta`, so beta users move to each stable too.
 
 ## Cutting a release
 
@@ -38,7 +38,7 @@ Both update the Homebrew cask.
    gh run watch -R manojkarthick/openusage $(gh run list -R manojkarthick/openusage -w Release -L 1 --json databaseId -q '.[0].databaseId')
    ```
 
-The run commits `docs: changelog for v<version>` to `v0.7`, tags it, publishes the GitHub Release with the notes, builds and attaches `OpenUsage-<version>.dmg`, verifies the release (not a draft, correct pre-release flag, DMG attached, notes non-empty), and pushes the `version`/`sha256` bump to `Casks/openusage.rb` in `manojkarthick/homebrew-tap`.
+The run commits `docs: changelog for v<version>` to `v0.7`, tags it, publishes the GitHub Release with the notes, builds and attaches `OpenUsage-<version>.dmg`, verifies the release (not a draft, correct pre-release flag, DMG attached, notes non-empty), and pushes the `version`/`sha256` bump to `Casks/openusage@beta.rb` (and, for stable, `Casks/openusage.rb`) in `manojkarthick/homebrew-tap`.
 
 ## When a run fails
 

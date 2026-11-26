@@ -18,7 +18,7 @@ In this fork, `v0.7` is the active development line. Releases are cut by running
 - Versions stay `0.7.x` for good — upstream's `0.8` is a fundamental redesign, and the fork's numbering marks it as branched from the old line. Never reuse a `0.6.x` number (the original edition's tags, frozen on `tauri-legacy`) and never move to `0.8`, whose upstream tags already exist on this fork's remote.
 - **Never increase the version number on your own initiative — always ask for explicit approval first.** Never run the Release workflow or push a tag without explicit sign-off.
 - PRs into `v0.7` are squash-merged with the PR title, which must be a Conventional Commit; git-cliff groups the changelog by its type.
-- Beta releases use `-beta.N` tags and stay GitHub pre-releases. Stable releases use plain tags and become GitHub "Latest". Both update the Homebrew cask.
+- Beta releases use `-beta.N` tags and stay GitHub pre-releases. Stable releases use plain tags and become GitHub "Latest". Betas update only the `openusage@beta` cask; stables update both `openusage` and `openusage@beta`.
 - Never leave a release in Draft, and never ship blank notes: the Release workflow verifies the published release (not a draft, DMG attached, notes present) after every cut.
 
 ## Architecture

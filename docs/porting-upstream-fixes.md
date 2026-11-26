@@ -61,7 +61,7 @@ After adapting the code and unit tests:
    gh workflow run release.yml --repo manojkarthick/openusage -f channel=stable
    gh run watch --repo manojkarthick/openusage
    ```
-   It picks the next `0.7.x`, writes the changelog, tags, publishes the GitHub Release with the DMG, and bumps `Casks/openusage.rb` in `manojkarthick/homebrew-tap`.
+   It picks the next `0.7.x`, writes the changelog, tags, publishes the GitHub Release with the DMG, and bumps the casks in `manojkarthick/homebrew-tap` (`openusage` and `openusage@beta` for stable, only `openusage@beta` for beta).
 3. Upgrade on any Mac:
    ```sh
    brew update && brew upgrade --cask openusage
