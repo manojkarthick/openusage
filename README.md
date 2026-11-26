@@ -1,7 +1,7 @@
 # OpenUsage
 
 > [!NOTE]
-> This is a maintained `v0.7` fork of [robinebers/openusage](https://github.com/robinebers/openusage), branched from `v0.7.16` before the `v0.8.0` rewrite. It preserves the `v0.7` UI, local credential discovery, local spend/token estimates, and local HTTP API while backporting provider fixes (such as Antigravity's updated Cloud Code quota endpoints and Argon weekly quota). Releases are ad-hoc signed Apple Silicon (`arm64`) builds with Sparkle auto-updates and iCloud sync disabled.
+> This is a maintained `v0.7` fork of [robinebers/openusage](https://github.com/robinebers/openusage), branched from `v0.7.16` before the `v0.8.0` rewrite. It preserves the `v0.7` UI, local credential discovery, local spend/token estimates, and local HTTP API while backporting provider fixes (such as Antigravity's updated Cloud Code quota endpoints and Argon weekly quota). Releases are ad-hoc signed Apple Silicon (`arm64`) builds with in-app Sparkle updates enabled (from this fork's own appcast feed) and iCloud sync disabled.
 
 Track your AI coding subscriptions from the macOS menu bar — native Swift edition.
 
@@ -29,7 +29,7 @@ If you already have an older `OpenUsage.app` in `/Applications`, pass `--force` 
 xattr -dr com.apple.quarantine /Applications/OpenUsage.app
 ```
 
-Requires macOS 15 (Sequoia) or later on Apple Silicon (`arm64`). Updates are delivered via Homebrew (`brew upgrade --cask openusage`) rather than Sparkle.
+Requires macOS 15 (Sequoia) or later on Apple Silicon (`arm64`). Once installed, OpenUsage checks for updates automatically via Sparkle (stable or beta, configurable in **Settings → Updates**); Homebrew casks are kept up to date as well.
 
 ## Supported Providers
 
@@ -100,9 +100,10 @@ Run the **Release** workflow ([.github/workflows/release.yml](.github/workflows/
 - writes the changelog with [git-cliff](https://git-cliff.org) ([cliff.toml](cliff.toml)) and commits it to `CHANGELOG.md`,
 - tags the release and publishes the GitHub Release (betas as pre-releases),
 - runs `swift test`, builds the `arm64` ad-hoc signed DMG via [script/release.sh](script/release.sh), and attaches it,
+- signs the DMG with Sparkle's EdDSA key and publishes the updated `appcast.xml` to `gh-pages` (GitHub Pages),
 - bumps the casks in `manojkarthick/homebrew-tap`: stable bumps `openusage` and `openusage@beta`, beta bumps only `openusage@beta`.
 
-PRs into `v0.7` are squash-merged, so the PR title (a Conventional Commit such as `fix(cursor): …`) becomes the changelog entry. The only secret is `HOMEBREW_TAP_TOKEN`, a fine-grained PAT with Contents read/write on `manojkarthick/homebrew-tap`.
+PRs into `v0.7` are squash-merged, so the PR title (a Conventional Commit such as `fix(cursor): …`) becomes the changelog entry. Required secrets are `HOMEBREW_TAP_TOKEN` (fine-grained PAT with Contents read/write on `manojkarthick/homebrew-tap`), `SPARKLE_PRIVATE_KEY`, and `SPARKLE_PUBLIC_KEY`.
 
 ## License
 

@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Builds an arm64, ad-hoc signed OpenUsage.app (without iCloud or Sparkle auto-update feed)
-# and wraps it in dist/OpenUsage-<version>.dmg.
+# Builds an arm64, ad-hoc signed OpenUsage.app (without iCloud) and wraps it in
+# dist/OpenUsage-<version>.dmg. When SPARKLE_PUBLIC_KEY is set, bakes in the Sparkle feed keys so
+# in-app auto-updates are active; otherwise leaves the updater dormant for local packaging runs.
 #
 # Required env:
 #   OPENUSAGE_VERSION     human version, e.g. 0.7.17 (CFBundleShortVersionString)
 # Optional env:
 #   OPENUSAGE_BUILD       CFBundleVersion (monotonic). Default: git commit count.
+#   SPARKLE_PUBLIC_KEY    base64 EdDSA public key (SUPublicEDKey). Enables Sparkle when set.
+#   SPARKLE_FEED_URL      appcast URL. Default: https://manojkarthick.github.io/openusage/appcast.xml
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
@@ -19,6 +22,8 @@ BUNDLE_ID="com.robinebers.openusage"
 MIN_SYSTEM_VERSION="15.0"
 VERSION="$OPENUSAGE_VERSION"
 BUILD="${OPENUSAGE_BUILD:-$(git rev-list --count HEAD)}"
+FEED_URL="${SPARKLE_FEED_URL:-https://manojkarthick.github.io/openusage/appcast.xml}"
+SPARKLE_PUBLIC_KEY="${SPARKLE_PUBLIC_KEY:-}"
 DMG_NAME="$APP_NAME-$VERSION.dmg"
 
 DIST_DIR="$ROOT_DIR/dist"
@@ -74,7 +79,19 @@ else
     --output-partial-info-plist /dev/null --output-format human-readable-text --errors --warnings
 fi
 
-# Omit SUFeedURL and NSUbiquitousContainers so Sparkle update checks and iCloud sync stay off.
+# Omit NSUbiquitousContainers so iCloud sync stays off. Only write Sparkle keys when a public EdDSA
+# key is supplied (CI releases pass it; local packaging runs stay dormant by default).
+SPARKLE_PLIST=""
+if [ -n "$SPARKLE_PUBLIC_KEY" ]; then
+  SPARKLE_PLIST=$(cat <<SPARKLE
+  <key>SUFeedURL</key><string>$FEED_URL</string>
+  <key>SUPublicEDKey</key><string>$SPARKLE_PUBLIC_KEY</string>
+  <key>SUEnableAutomaticChecks</key><true/>
+  <key>SUScheduledCheckInterval</key><integer>3600</integer>
+SPARKLE
+)
+fi
+
 cat >"$APP_CONTENTS/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -93,6 +110,7 @@ cat >"$APP_CONTENTS/Info.plist" <<PLIST
   <key>LSUIElement</key><true/>
   <key>NSPrincipalClass</key><string>NSApplication</string>
   <key>NSHighResolutionCapable</key><true/>
+${SPARKLE_PLIST}
 </dict>
 </plist>
 PLIST

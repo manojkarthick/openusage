@@ -76,17 +76,16 @@ Not touched: provider logins and API keys, and cached usage data. Turning iCloud
 
 ## Updates
 
-The Updates section appears only in builds that include a signed update feed. This fork's release
-builds don't ship one (see [Updates](updates.md)), so they don't show it, and neither do local developer
-builds.
+The Updates section appears in release builds (which ship with the fork's Sparkle update feed) and stays
+hidden in local developer builds.
 
 | Setting | Options | What it does |
 |---|---|---|
-| Check Automatically | On / Off | Whether Sparkle checks for updates in the background. You can still check manually when this is off. |
+| Check Automatically | On / Off | Whether Sparkle checks for updates in the background (hourly). You can still check manually when this is off. |
 | Beta Updates | On / Off | Adds pre-release builds to the updates you can receive. Stable releases remain available either way. |
 | Check for Updates… | button | Starts a manual update check and opens Sparkle's update window. |
 
-See [Updates](updates.md) for how fork builds are updated.
+See [Updates](updates.md) for how in-app updates, channels, and Homebrew installs work.
 
 ## Version
 

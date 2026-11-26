@@ -12,7 +12,7 @@ AGENTS.md is the source of truth for agent instructions in this repository. CLAU
 
 ## Releases
 
-In this fork, `v0.7` is the active development line. Releases are cut by running `.github/workflows/release.yml` (manual dispatch, `stable` or `beta`): it picks the next version, writes the changelog with git-cliff (`cliff.toml`) and commits it to `CHANGELOG.md`, tags, publishes the GitHub Release, builds and attaches an ad-hoc signed arm64 DMG, and bumps the Homebrew cask in `manojkarthick/homebrew-tap`. There's no Sparkle feed. See the release-swift skill.
+In this fork, `v0.7` is the active development line. Releases are cut by running `.github/workflows/release.yml` (manual dispatch, `stable` or `beta`): it picks the next version, writes the changelog with git-cliff (`cliff.toml`) and commits it to `CHANGELOG.md`, tags, publishes the GitHub Release, builds and attaches an ad-hoc signed arm64 DMG, updates the EdDSA-signed Sparkle appcast on `gh-pages` (`https://manojkarthick.github.io/openusage/appcast.xml`), and bumps the Homebrew cask in `manojkarthick/homebrew-tap`. See the release-swift skill.
 
 ### Guardrails (do not break)
 - Versions stay `0.7.x` for good — upstream's `0.8` is a fundamental redesign, and the fork's numbering marks it as branched from the old line. Never reuse a `0.6.x` number (the original edition's tags, frozen on `tauri-legacy`) and never move to `0.8`, whose upstream tags already exist on this fork's remote.
